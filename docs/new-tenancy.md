@@ -485,6 +485,23 @@ sudo -u github-runner tee .path >/dev/null <<'EOF'
 EOF
 ```
 
+OP03 cloud-init also creates the runner-owned key pair used for project VM
+creation and supported Ansible operations. Verify its metadata without printing
+either key:
+
+```bash
+sudo -u github-runner test -r /home/github-runner/.ssh/oci_vm_key
+sudo -u github-runner test -r /home/github-runner/.ssh/oci_vm_key.pub
+stat -c '%U:%G %a %n' \
+  /home/github-runner/.ssh \
+  /home/github-runner/.ssh/oci_vm_key \
+  /home/github-runner/.ssh/oci_vm_key.pub
+```
+
+The expected owner and group are `github-runner:github-runner`; the expected
+modes are `700`, `600`, and `644`, respectively. Do not copy the private key to
+GitHub, a project repository, a handoff artifact, or an operator workstation.
+
 Install or restart the service only after those files exist. Verify from the
 service account that `rg`, `jq`, and `python3.11` resolve through that exact
 path and that the environment values are visible to a diagnostic workflow.
