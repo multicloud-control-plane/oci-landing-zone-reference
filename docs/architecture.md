@@ -93,13 +93,14 @@ compartment. It does not grant NSG management across the shared environment
 network compartment; the project manifest combines the handed-off project
 compartment OCID with the handed-off shared VCN OCID.
 
-OCI resolves a named compartment in a policy statement as a direct child of
-the compartment where that policy is attached. The adapter therefore attaches
-the project GitOps policy to the environment's `PROJECTS` compartment and the
-network/security GitOps policies to the environment compartment. Their
-statements still target only the exact project, network, or security child
-compartment; attaching them at the parent makes those scopes effective without
-broadening them.
+The adapter attaches the project-specific GitOps policy inside the exact
+project compartment, alongside the human administrator policy created by OE.
+The policy and project therefore share one OP04 lifecycle boundary. Retiring
+one project cannot alter a sibling project's policy reference. The shared
+network and security GitOps policies remain attached to the environment
+compartment because their statements target the environment's shared
+`NETWORK` and `SECURITY` child compartments. Each policy still grants access
+only to its named target.
 
 Creating or deleting a project NSG also changes its shared VCN. The network
 GitOps policy therefore adds OCI's narrowly conditioned `manage vcns` grant

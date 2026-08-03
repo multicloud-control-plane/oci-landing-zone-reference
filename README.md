@@ -66,9 +66,8 @@ The configuration pins OE `v3.1.0`, Orchestrator `release-2.1.4`, and its OCI
 database module dependency to immutable revisions. Workflows install Terraform
 `1.15.8`; the Orchestrator's `>= 1.5.0` declaration is its OCI Resource Manager
 compatibility floor, not a cap on this CLI execution path. OE `v3.1.0` creates
-one compartment per project. The three
-workload-role fields in the handoff all reference that same compartment; no
-retired OE `v2.x` child hierarchy is recreated.
+one compartment per project. The three workload-role fields in the handoff all
+reference that same compartment.
 
 After OP04, download `project-foundation-handoff.json` for the Multi-Cloud
 Control Plane and `environment_information.md` for the project team. Neither file

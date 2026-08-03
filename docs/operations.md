@@ -35,6 +35,12 @@ This preserves the governed project pull-request lifecycle for approved project
 NSGs, including deletion. Project Teams must not remove Security Zones manually
 or receive Security Zone permissions.
 
+The project-specific runner policy is created inside the same project
+compartment. This keeps the compartment and policy in one isolated OP04
+lifecycle boundary. Runner policies that target the shared `NETWORK` and
+`SECURITY` compartments remain attached at the environment boundary. Keep
+these generated scopes unchanged when onboarding or retiring a project.
+
 The Hub management security list must allow SSH only from the platform
 Bastion's current private endpoint `/32`. Retrieve that address from OCI,
 record it in `config/customer.jsonnet` as

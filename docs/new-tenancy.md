@@ -498,11 +498,13 @@ compartment, never across the shared environment network compartment. The
 resulting handoff repeats the same project compartment OCID in its three
 workload-role fields for compatibility.
 
-The generated GitOps policies are attached to the immediate parent of every
-named target: project policy under the environment `PROJECTS` compartment and
-network/security policies under the environment compartment. This is required
-by OCI named-compartment policy resolution. Do not move those GitOps policies
-inside the child compartment they target.
+The project-specific GitOps policy is attached inside the exact project
+compartment, alongside the OE administrator policy. This keeps the project
+compartment, its policy, and its isolated OP04 state in one lifecycle boundary.
+The network and security GitOps policies remain attached to the environment
+compartment because they target the shared `NETWORK` and `SECURITY` child
+compartments. Do not move the project policy to the shared `PROJECTS` parent or
+broaden any of these named scopes.
 
 OCI treats NSG create/delete as changes to both the NSG and its VCN. The
 network GitOps policy must retain the generated conditional `manage vcns`
@@ -513,10 +515,11 @@ to create an NSG in a project compartment against the shared environment VCN.
 When a protected adapter change modifies an existing project's generated IAM,
 first review and merge the adapter change without running project Terraform.
 Then regenerate `op04:<environment>-<project>` and submit a second pull request
-containing that project's `project-security-zone-exception.json` declaration
-and, when it changed, `generated/iam.json`. The OP04 workflow regenerates both
-artifacts from the protected default branch and reconciles only that project's
-existing OP04 state.
+containing only the generated artifact or artifacts that changed:
+`generated/iam.json`, `project-security-zone-exception.json`, or both. The OP04
+workflow regenerates both artifacts from the protected default branch,
+validates the submitted files, and reconciles only that project's existing
+OP04 state.
 
 For a later environment, first add it to `customer.jsonnet` without activating
 it, generate and deploy its OP02 stack, commit its protected blueprint, then add
