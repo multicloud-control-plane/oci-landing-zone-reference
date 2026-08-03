@@ -62,8 +62,8 @@ Dedicated Region Cloud@Customer, government, and other non-`oc1` identifiers.
 - Keep OP04 under Cloud Operator ownership. Project Teams start after handoff.
 - Do not run local applies after the permanent GitOps flow is active.
 
-The configuration pins OE `v3.1.0`, Orchestrator `release-2.1.4`, and Exadata
-modules `release-1.2.0` to immutable revisions. Workflows install Terraform
+The configuration pins OE `v3.1.0`, Orchestrator `release-2.1.4`, and its OCI
+database module dependency to immutable revisions. Workflows install Terraform
 `1.15.8`; the Orchestrator's `>= 1.5.0` declaration is its OCI Resource Manager
 compatibility floor, not a cap on this CLI execution path. OE `v3.1.0` creates
 one compartment per project. The three
