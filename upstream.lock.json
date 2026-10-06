@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "observed_on": "2026-10-06",
+  "sources": {
+    "operating_entities": {
+      "repository": "https://github.com/oci-landing-zones/oci-landing-zone-operating-entities.git",
+      "observed_ref": "master",
+      "commit": "aa65ab5cfa2b5e511e736f311bac22f638badf76"
+    },
+    "orchestrator": {
+      "repository": "https://github.com/oci-landing-zones/terraform-oci-modules-orchestrator.git",
+      "observed_ref": "main",
+      "commit": "4faa47489242abe056fb5ceb0288c51e29522902",
+      "entrypoint": "rms-facade"
+    },
+    "repository_design": {
+      "repository": "https://github.com/oracle-devrel/technology-engineering.git",
+      "observed_ref": "OperationsAdvisory-repository-design",
+      "commit": "79e718aa0c70c4a794fb43a7a21a58820a37bb73"
+    }
+  }
+}

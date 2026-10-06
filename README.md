@@ -1,85 +1,106 @@
-# OCI Landing Zone
+# OCI Landing Zone Reference Implementation
 
-Reviewed: 2026-07-25
+Our reference implementation of the [Operations Advisory Landing Zone
+Repository Design](https://github.com/oracle-devrel/technology-engineering/tree/OperationsAdvisory-repository-design/oci-and-db/foundation/operations-advisory/multi-cloud-operating-models/landing-zone-repository-design).
 
-Use reviewed Git changes to establish and operate your OCI foundation. A pull
-request shows the Terraform plan; an approved merge applies the change through
-a trusted self-hosted runner.
+Use it to implement reusable operations aligned with **what changes, who operates
+it, and where its resources are managed**. It includes a Jsonnet projection of
+the official Operating Entities blueprint, independent regional stacks,
+dependency preparation, project onboarding/handoff and credential-free tests.
 
-## Deployment sequence
+## Start here
 
-Run the phases in order for a new tenancy:
+Requirements for source generation: Python 3.10+, Git and Jsonnet 0.20+.
 
-| Phase | Outcome |
-|---|---|
-| Bootstrap readiness | Private foundation runner, Instance Principal, tools, and state access verified without changing OCI |
-| OP00 | Tenancy-wide administrative groups and policies |
-| OP01 | Shared landing-zone compartments, network, and security |
-| OP02 | One governed environment and its project network |
-| OP03 | Platform foundation, when hosted in this tenancy |
-| OP04 | One official OE project compartment, group, policies, and handoff |
+```bash
+python3 scripts/reference.py generate --output generated
+python3 scripts/reference.py validate --generated generated
+python3 -m unittest discover -s tests -v
+python3 scripts/check_contract.py --generated generated
+```
 
-OP00–OP04 have separate Terraform state and dedicated workflows under
-`.github/workflows/`. Bootstrap readiness is read-only and has no state. After
-initial deployment, change only the phase that owns the resource.
+Generation fetches and verifies the immutable OE commit in
+[upstream.lock.json](upstream.lock.json). The checked-in example is synthetic;
+replace it with a reviewed source model in a customer-controlled private
+repository before deployment. Keep generated configurations separate from
+their source and use a new output directory for each revision.
 
-## Before the first workflow
+This reference replaces the repository's earlier single-region preview. Its
+state boundaries and handoff format differ: existing installations must follow
+the [migration procedure](docs/migration.md), rather than apply these generated
+configurations over their previous states.
 
-An OCI administrator must create one dedicated private foundation runner, its
-exact-instance dynamic group and policy, and the private foundation-state
-bucket before foundation automation can start. Create the separate
-project-state bucket before enabling OP03. See
-[New tenancy setup](docs/new-tenancy.md) before changing any phase.
-Both state buckets must have Object Storage versioning enabled.
+## Operations
 
-Register the runner with this repository and set these GitHub repository
-variables:
+| Operation | Scope and owner | Configuration/state boundary |
+| --- | --- | --- |
+| **OP.00 Global Landing Zone** | Cloud Operations / IAM governance | `common/`: all IAM, global governance, Cloud Guard, root Security Zone and home-region events |
+| **OP.01 Landing Zone Environment** | Cloud Operations / network and security | `lze_<environment>/<region>/`: hub, DRG/routing, firewall and shared regional monitoring/security |
+| **OP.02 Environment** | Environment operation, with Cloud Operations as configuration writer in this example | `workload_<environment>/<region>/`: spoke/attachment and its scanning, logs, topics, alarms and events |
+| **OP.03 Platform** | Platform operation; IAM remains governed by Cloud Operations | `platform_<name>/` under the owning LZ/workload environment: dedicated network, attachment and platform monitoring |
+| **OP.04 Project** | Cloud Operations | Update project IAM in `common/`, then publish the reviewed handoff; optional regional project baseline is a separate extension |
+| **Project execution** | Project team inside its handoff | Separate private prod/non-prod repositories and workload states |
 
-| Variable | Value |
-|---|---|
-| `FOUNDATION_RUNNER_LABELS` | JSON runner-label array, for example `["self-hosted","linux","arm64","mccp-foundation"]` |
-| `OCI_TF_STATE_BUCKET` | Foundation-state bucket name |
-| `PROJECT_STATE_BUCKET` | Separate project-state bucket name used by OP03 IAM |
-| `OCI_TF_STATE_NAMESPACE` | Object Storage namespace |
-| `REGION` | State bucket region |
-| `OCI_TENANCY_OCID` | Tenancy used to validate the OP02 handoff |
-| `FOUNDATION_AUTOMATION_READY` | `false` until readiness passes, then `true` |
+An OP is repeatable; it can have many instances. Stack count follows operations,
+environments, regions and ownership. A VCN name alone does not determine it.
 
-The runner uses OCI Instance Principal authentication. Do not store API keys or
-private keys in this repository.
+## Implemented example
 
-This preview supports only the commercial OCI realm `oc1` and standard
-commercial region identifiers such as `eu-frankfurt-1`. Its validators reject
-Dedicated Region Cloud@Customer, government, and other non-`oc1` identifiers.
+- One shared Landing Zone environment with an OCI Network Firewall **Hub B**.
+- Two regions: Frankfurt as the example home region and Amsterdam as a secondary
+  region. No assumption that the secondary region is a complete DR solution.
+- `prod` and `dev` workload environments, each with its own state in each region.
+- Shared `ops` and prod `data` platforms with their own network/observability
+  footprint in each region. Application/database services are explicit platform
+  extensions; these examples do not provision Exadata or a runner VM.
+- One `shop` project per workload environment; IAM is consolidated in OP00.
+- **11 states and 13 complete configuration sets.** Hub bootstrap and completion
+  share the same two hub states. Handoff publication has no Terraform state.
 
-## Operating rules
+```mermaid
+flowchart TD
+    G[OP00 Global IAM and governance] --> H[OP01 Hub bootstrap per region]
+    H --> E[OP02 Workload environments]
+    H --> S[OP03 Shared platform]
+    E --> P[OP03 Environment platform]
+    E --> F[OP01 Hub completion, same state]
+    S --> F
+    P --> F
+    G --> O[OP04 Onboarding and handoff]
+    E --> O
+    O --> R[Project repositories and workload states]
+```
 
-- Replace every customer token in `config/customer.jsonnet` before generation.
-- Generate phase JSON with `scripts/generate_foundation.sh`; do not handcraft
-  resources already supplied by OE.
-- Use one focused pull request per phase and review replacement, deletion, and
-  IAM changes before approval.
-- Keep OP04 under Cloud Operator ownership. Project Teams start after handoff.
-- Do not run local applies after the permanent GitOps flow is active.
+## Customer adoption
 
-The configuration pins OE `v3.1.0`, Orchestrator `release-2.1.4`, and its OCI
-database module dependency to immutable revisions. Workflows install Terraform
-`1.15.8`; the Orchestrator's `>= 1.5.0` declaration is its OCI Resource Manager
-compatibility floor, not a cap on this CLI execution path. OE `v3.1.0` creates
-one compartment per project. The three workload-role fields in the handoff all
-reference that same compartment.
+1. Agree operation ownership, IAM governance and the home/regional split using
+   [the operating model](docs/operating-model.md).
+2. Review the source model and generate the private configuration set using
+   [generation and dependencies](docs/generation-and-dependencies.md).
+3. Use [Resource Manager](docs/resource-manager.md) with private Object Storage,
+   or the [Terraform CLI runtime](docs/terraform-cli.md) in an approved private
+   pipeline. Each job manages one selected stack; no cascading applies.
+4. Follow [project onboarding](docs/project-onboarding.md) and
+   [Day 2 operations](docs/day2.md). For an existing Landing Zone, use
+   [the migration procedure](docs/migration.md).
 
-After OP04, download `project-foundation-handoff.json` for the Multi-Cloud
-Control Plane and `environment_information.md` for the project team. Neither file
-contains credentials.
+Code, reference examples and offline tests are public. Customer configuration,
+runtime outputs and privileged execution belong in the customer's private
+installation. The public workflow runs no cloud deployment.
 
-## Guides
+## Validation status
 
-1. [New tenancy setup](docs/new-tenancy.md)
-2. [Architecture and state](docs/architecture.md)
-3. [Phase operations](docs/operations.md)
+The automated checks cover deterministic generation, operation ownership,
+global/regional isolation, state/output uniqueness, dependency conflicts,
+firewall/DRG binding and project handoff boundaries. They also compare generated
+top-level families with the pinned Orchestrator facade.
 
-## License
+Terraform plan/apply, traffic isolation, firewall completion and migration/rollback
+are **pending validation in an OCI test tenancy**. See
+[validation and scope](docs/validation.md) for the exact limits. The security
+projection is an explicit initial baseline; this repository does not claim a
+complete CIS certification. See [the design](docs/design.md) and
+[upstream provenance](docs/upstream.md).
 
-Copyright (c) 2026 Oracle and/or its affiliates. Licensed under the Universal
-Permissive License, Version 1.0. See [LICENSE](LICENSE).
+Licensed under [UPL 1.0](LICENSE). Reused resource definitions remain owned by
+the OCI Landing Zones upstream projects.

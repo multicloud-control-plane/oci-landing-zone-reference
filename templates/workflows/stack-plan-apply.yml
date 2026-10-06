@@ -1,0 +1,104 @@
+# Install in a PRIVATE customer configuration repository after configuring
+# protected foundation-plan/foundation-apply environments and one dedicated runner.
+name: One foundation operation
+on:
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: Catalog stack ID
+        required: true
+        type: string
+      stage:
+        description: Complete operation or hub phase
+        default: complete
+        type: choice
+        options: [complete, bootstrap, final]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foundation-${{ inputs.stack }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.event.repository.private && vars.FOUNDATION_AUTOMATION_READY == 'true' && github.ref == 'refs/heads/main'
+    environment: foundation-plan
+    runs-on: ${{ fromJSON(vars.FOUNDATION_RUNNER_LABELS) }}
+    timeout-minutes: 120
+    outputs:
+      job_root: ${{ steps.plan.outputs.job_root }}
+      reference_commit: ${{ steps.plan.outputs.reference_commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: config-repo
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: multicloud-control-plane/oci-landing-zone-reference
+          ref: ${{ vars.REFERENCE_COMMIT }}
+          path: reference
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: ${{ vars.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: Prepare and plan the selected operation
+        id: plan
+        shell: bash
+        env:
+          STACK: ${{ inputs.stack }}
+          STAGE: ${{ inputs.stage }}
+          REFERENCE_COMMIT: ${{ vars.REFERENCE_COMMIT }}
+          JOBS_ROOT: ${{ vars.PRIVATE_OPERATION_ROOT }}
+          OUTPUTS_ROOT: ${{ vars.PRIVATE_OUTPUTS_ROOT }}
+          STATE_BUCKET: ${{ vars.STATE_BUCKET }}
+          STATE_NAMESPACE: ${{ vars.STATE_NAMESPACE }}
+          TENANCY: ${{ vars.OCI_TENANCY_OCID }}
+        run: |
+          set -euo pipefail
+          [[ "$REFERENCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test -n "$JOBS_ROOT" && test -n "$OUTPUTS_ROOT"
+          job_root="$JOBS_ROOT/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$job_root"
+          mkdir -p "$job_root"
+          chmod 700 "$job_root"
+          python3 reference/scripts/reference.py generate --model config-repo/config/model.jsonnet --output "$job_root/generated"
+          binding_args=()
+          if [ "$STAGE" = final ]; then
+            binding_args=(--bindings config-repo/config/firewall-bindings.json)
+          fi
+          python3 reference/scripts/reference.py prepare --generated "$job_root/generated" --stack "$STACK" --stage "$STAGE" --outputs "$OUTPUTS_ROOT" --destination "$job_root/inputs" --runtime cli "${binding_args[@]}"
+          python3 reference/scripts/runtime.py --generated "$job_root/generated" --stack "$STACK" --prepared "$job_root/inputs" --destination "$job_root/orchestrator" --bucket "$STATE_BUCKET" --namespace "$STATE_NAMESPACE" --tenancy "$TENANCY"
+          cd "$job_root/orchestrator/rms-facade"
+          cp "$GITHUB_WORKSPACE/config-repo/config/.terraform.lock.hcl" .terraform.lock.hcl
+          terraform init -lockfile=readonly -backend-config=backend.tfbackend
+          terraform validate
+          terraform plan -var-file=inputs.tfvars.json -out=operation.tfplan
+          terraform show -no-color operation.tfplan > "$job_root/plan.txt"
+          sha256sum operation.tfplan inputs.tfvars.json backend.tfbackend .terraform.lock.hcl "$job_root/inputs/config.json" "$job_root/inputs/dependencies.json" > reviewed.sha256
+          printf 'job_root=%s\nreference_commit=%s\n' "$job_root" "$REFERENCE_COMMIT" >> "$GITHUB_OUTPUT"
+          printf 'Review the private plan at %s/plan.txt before approving foundation-apply.\n' "$job_root" >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    needs: plan
+    environment: foundation-apply
+    runs-on: ${{ fromJSON(vars.FOUNDATION_RUNNER_LABELS) }}
+    timeout-minutes: 120
+    steps:
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: ${{ vars.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: Apply the approved exact plan
+        shell: bash
+        env:
+          JOB_ROOT: ${{ needs.plan.outputs.job_root }}
+        run: |
+          set -euo pipefail
+          cd "$JOB_ROOT/orchestrator/rms-facade"
+          sha256sum -c reviewed.sha256
+          terraform apply operation.tfplan
+          printf 'Verify OCI and publish official outputs from %s/inputs/outputs to the regional private producer prefix.\n' "$JOB_ROOT" >> "$GITHUB_STEP_SUMMARY"
