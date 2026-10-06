@@ -53,8 +53,9 @@ explicitly rejected in this first version. See [Studio import](docs/studio-impor
 The [private workflow](templates/workflows/stack-plan-apply.yml) offers `model`
 or `studio` as the configuration source. The intended architecture is
 **Studio design → reference foundation deployment → MCCP project self-service**;
-the MCCP request/handoff integration still needs implementation and end-to-end
-validation. See [integration boundaries](docs/studio-mccp-flow.md).
+MCCP already defines the schema-3 handoff and project-owned NSGs in INFRA.
+This reference still needs adaptation to those contracts and end-to-end
+validation. See [contracts and implementation gaps](docs/studio-mccp-flow.md).
 
 ## Operations
 

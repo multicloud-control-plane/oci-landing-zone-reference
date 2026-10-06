@@ -250,6 +250,9 @@ model.jsonnet preserves the original config objects and can regenerate this set.
 Run the normal prepare/plan/approval flow in a private installation. Import runs
 neither Terraform nor OCI. Deployed outputs and firewall OCIDs are still required.
 OCI deployment, connectivity and migration/rollback remain unvalidated here.
-MCCP self-service follows the approved OP04 handoff; the current reference
-handoff format is not yet a tested MCCP integration contract.
+MCCP already defines a schema-3 handoff and project-owned NSGs in INFRA.
+This importer still retains project NSGs in OP02 and uses the reference's
+version-1 handoff with a different IAM hierarchy. Adapt those implementation
+gaps to the existing MCCP contract; they are not open design decisions.
+See docs/studio-mccp-flow.md in the reference repository for sources and scope.
 '''

@@ -42,3 +42,12 @@ prepare/plan/review/apply path. Tests cover real OE generation, snapshot drift,
 unsupported choices, archive/source safety, multi-region global consistency,
 network/NSG preservation, existing example regression and runtime bindings.
 Publish a PR with passing offline CI; retain mandatory independent review.
+
+## MCCP contract review — 2026-10-06
+
+The existing MCCP foundation at commit
+`9b4033267af881e65fe8c2b212f220b2804cac09` already defines schema-3 handoff,
+APP/DB/INFRA project targets, and project-owned NSGs in INFRA, excluded from
+OP02. Importer preservation of NSGs in OP02 is a reference compatibility gap;
+it does not reopen the ownership decision. Reuse the existing contracts in a
+subsequent integration adaptation; see [the reviewed boundary](../../studio-mccp-flow.md).

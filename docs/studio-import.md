@@ -83,10 +83,13 @@ For later Studio edits, export/import a fresh revision and review the delta
 against the canonical model before promotion. Do not overwrite later project
 changes by blindly reimporting an older Studio snapshot.
 
-Imported project NSGs are owned by OP02. [Project onboarding](project-onboarding.md)
-therefore requires review of affected regional configurations as well as common
-IAM. MCCP must use the agreed handoff and resource ownership; see
-[the Studio/reference/MCCP flow](studio-mccp-flow.md).
+The current importer places project NSGs in OP02; that is a compatibility gap
+with MCCP's established project ownership in INFRA. Its handoff also requires
+schema 3 and APP/DB/INFRA targets. These decisions are already made in the
+existing MCCP foundation; this reference must reuse them. See
+[the contract and adaptation gaps](studio-mccp-flow.md) before connecting project
+self-service. [Project onboarding](project-onboarding.md) describes the current
+reference behavior.
 
 Offline tests validate import/projection/runtime-input contracts. OCI deployment,
 effective IAM, traffic and migration acceptance remain pending in a test tenancy.

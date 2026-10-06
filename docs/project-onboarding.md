@@ -34,7 +34,9 @@ The boundary includes the deployed compartment and assigned VCN/subnets, no
 credentials, no IAM/hub grant. Review deployment evidence before publication
 in the private project repository. It is a reference-owned version-1 contract,
 not the MCCP machine handoff or an official Orchestrator output. File publication
-has no state. The [MCCP integration boundary](studio-mccp-flow.md) remains explicit.
+has no state. MCCP already defines a schema-3 handoff and project NSGs in INFRA;
+the current projection must be adapted to that established contract. See the
+[MCCP contract and adaptation gaps](studio-mccp-flow.md).
 
 Use separate prod/non-prod project repositories, executor and workload-state
 bucket. Foundation grants effective permissions; JSON constraints do not enforce
