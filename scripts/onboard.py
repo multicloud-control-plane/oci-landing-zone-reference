@@ -14,7 +14,15 @@ def add_project(model, environment, project):
         raise ContractError("unknown workload environment")
     if project in model["projects"][environment]:
         raise ContractError("project already exists")
+    configs = model.get("studio_configs", {})
+    for region, config in configs.items():
+        if environment not in config["environments"]:
+            raise ContractError("Studio onboarding environment missing in region: " + region)
+        if project in config["environments"][environment]["projects"]:
+            raise ContractError("project already exists in Studio design: " + region)
     model["projects"][environment][project] = {}
+    for config in configs.values():
+        config["environments"][environment]["projects"][project] = {}
     return model
 
 
@@ -27,6 +35,7 @@ if __name__ == "__main__":
         model = json.loads(run(["jsonnet", str(Path(args.model).resolve())]))
         result = add_project(model, args.environment, args.project)
         write_json(args.output, result)
-        print(f"OP04 change prepared: {args.output}; regenerate and review common/config.json")
+        scope = "common IAM and affected OP02 project NSGs" if "studio_configs" in result else "common/config.json"
+        print(f"OP04 change prepared: {args.output}; regenerate and review {scope}")
     except (ContractError, OSError) as exc:
         p.exit(1, f"ERROR: {exc}\n")

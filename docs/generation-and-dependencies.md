@@ -19,6 +19,10 @@ Regional service-policy statements are combined in the single IAM configuration.
 The emitted `catalog.json` is reference-owned orchestration metadata, not an
 Orchestrator configuration family. Each `config.json` is a complete input set.
 
+Use [Studio import](studio-import.md) for exported Studio designs. Its normalized
+model retains original network choices and project NSGs; the synthetic example
+mode continues to exclude project NSGs from foundation ownership.
+
 ## Initial order
 
 1. OP00 common in home region; save compartments output.

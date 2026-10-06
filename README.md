@@ -30,6 +30,32 @@ state boundaries and handoff format differ: existing installations must follow
 the [migration procedure](docs/migration.md), rather than apply these generated
 configurations over their previous states.
 
+## Import from Landing Zone Studio
+
+Use [Studio](https://oci-landing-zones.github.io/oci-landing-zone-operating-entities/)
+to design the supported Hub B/CIS1/oc1 baseline, then import its ZIP:
+
+```bash
+python3 scripts/reference.py import-studio \
+  --source customer/studio-fra.zip \
+  --home-region eu-frankfurt-1 --landing-zone-environment shared \
+  --notification-email operations@example.com \
+  --output generated/studio-revision-001
+```
+
+Replace the example email with your approved operations address. Import checks
+the exported JSON against the pinned generator, preserves CIDRs/subnets/project
+NSGs, and produces operation configurations, source evidence and an import
+report. Review the reported ownership/control adjustments before deployment.
+Other hubs, CIS2, environment Security Zones and workload extensions are
+explicitly rejected in this first version. See [Studio import](docs/studio-import.md).
+
+The [private workflow](templates/workflows/stack-plan-apply.yml) offers `model`
+or `studio` as the configuration source. The intended architecture is
+**Studio design → reference foundation deployment → MCCP project self-service**;
+the MCCP request/handoff integration still needs implementation and end-to-end
+validation. See [integration boundaries](docs/studio-mccp-flow.md).
+
 ## Operations
 
 | Operation | Scope and owner | Configuration/state boundary |

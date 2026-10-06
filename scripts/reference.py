@@ -375,6 +375,19 @@ def handoff(catalog, environment, project, region, compartments, network):
             "constraints": {"may_manage_iam": False, "may_manage_hub": False}}
 
 
+def write_generation(model, documents, output, provenance):
+    catalog = make_catalog(model, documents)
+    count = validate(catalog, documents)
+    output = Path(output).resolve()
+    if output.exists() and any(output.iterdir()):
+        raise ContractError("generate into an empty directory; never retain stale operation files")
+    for path, document in documents.items():
+        write_json(checked_path(output, path), document)
+    write_json(output / "catalog.json", catalog)
+    write_json(output / "provenance.json", provenance)
+    return catalog, count
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -385,6 +398,13 @@ def main():
     gen.add_argument("--model", default=str(ROOT / "examples/two-region.jsonnet"))
     gen.add_argument("--output", required=True)
     gen.add_argument("--upstream")
+    studio = sub.add_parser("import-studio", help="Import a Studio ZIP or literal config.jsonnet")
+    studio.add_argument("--source", action="append", required=True)
+    studio.add_argument("--home-region", required=True)
+    studio.add_argument("--landing-zone-environment", required=True)
+    studio.add_argument("--notification-email", required=True)
+    studio.add_argument("--output", required=True)
+    studio.add_argument("--upstream")
     val = sub.add_parser("validate")
     val.add_argument("--generated", required=True)
     prep = sub.add_parser("prepare")
@@ -413,16 +433,12 @@ def main():
         if run(["git", "-C", str(upstream), "rev-parse", "HEAD"]).strip() != expected:
             raise ContractError("generator upstream does not match lock")
         model, documents = evaluate(args.model, upstream)
-        catalog = make_catalog(model, documents)
-        count = validate(catalog, documents)
-        output = Path(args.output).resolve()
-        if output.exists() and any(output.iterdir()):
-            raise ContractError("generate into an empty directory; never retain stale operation files")
-        for path, document in documents.items():
-            write_json(checked_path(output, path), document)
-        write_json(output / "catalog.json", catalog)
-        write_json(output / "provenance.json", read_json(ROOT / "upstream.lock.json"))
+        catalog, count = write_generation(model, documents, args.output, read_json(ROOT / "upstream.lock.json"))
         print(f"Generated {len(catalog['stacks'])} stacks, {len(documents)} configurations, {count} owned keys")
+    elif args.command == "import-studio":
+        from studio import import_studio
+        catalog, count = import_studio(args)
+        print(f"Imported Studio: {len(catalog['stacks'])} stacks, {count} owned keys. Review studio-import-report.md before deployment.")
     elif args.command == "validate":
         generated = Path(args.generated)
         catalog = read_json(generated / "catalog.json")
@@ -442,6 +458,7 @@ def main():
 
 
 if __name__ == "__main__":
+    sys.modules.setdefault("reference", sys.modules[__name__])
     try:
         main()
     except (ContractError, OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:

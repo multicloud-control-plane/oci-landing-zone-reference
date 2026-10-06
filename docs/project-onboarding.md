@@ -13,9 +13,13 @@ python3 scripts/reference.py generate --model customer/model-next.json \
 ```
 
 Review project compartments/groups/policies in the complete common configuration.
-Upstream owns their definitions. Project NSGs are removed from OP02 foundation
-and belong to later project execution. Apply only the approved IAM change;
-regenerating every file does not authorize applying every stack.
+Upstream owns their definitions. The synthetic example removes project NSGs
+from OP02 foundation for later project execution. Studio imports preserve
+their project NSGs in OP02, so onboarding also changes the affected regional
+network configuration: review and deploy those operation changes separately
+before handing over the project. Regeneration does not authorize cascading
+applies. One NSG must have one state owner; do not let project automation also
+manage an NSG owned by OP02.
 
 ```bash
 python3 scripts/reference.py handoff \
@@ -29,7 +33,8 @@ python3 scripts/reference.py handoff \
 The boundary includes the deployed compartment and assigned VCN/subnets, no
 credentials, no IAM/hub grant. Review deployment evidence before publication
 in the private project repository. It is a reference-owned version-1 contract,
-not MCCP schema 3 or an official Orchestrator output. File publication has no state.
+not the MCCP machine handoff or an official Orchestrator output. File publication
+has no state. The [MCCP integration boundary](studio-mccp-flow.md) remains explicit.
 
 Use separate prod/non-prod project repositories, executor and workload-state
 bucket. Foundation grants effective permissions; JSON constraints do not enforce

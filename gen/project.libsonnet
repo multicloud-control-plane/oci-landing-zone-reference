@@ -15,10 +15,11 @@ local output_reference(section, key) = 'output://network_resources/' + section +
 
 function(model)
   assert std.objectHas(model.regions, model.home_region) : 'home_region must exist in regions';
+  local studio_mode = std.objectHas(model, 'studio_configs');
   local region_names = std.objectFields(model.regions);
   local raw(region) =
     local r = model.regions[region];
-    {
+    if studio_mode then model.studio_configs[region] else {
       region: region, region_short_name: r.short_name, realm: 'oc1', cis_level: 1,
       hub: { kind: 'hub_b', network: { vcn: r.hub } },
       environments: {
@@ -86,13 +87,13 @@ function(model)
     local shared_security_cmp = n.key_global('CMP', ['SECURITY']);
     local network_category(source, cmp) = source + {
       category_compartment_id: cmp,
-      vcns: { [key]: source.vcns[key] + { network_security_groups: {} }
+      vcns: { [key]: if studio_mode then source.vcns[key] else source.vcns[key] + { network_security_groups: {} }
               for key in std.objectFields(source.vcns) },
     };
     local hub_network(stage) =
       local source = if stage == 'bootstrap' then full.network_pre else full.network;
       local cat = source.network_configuration.network_configuration_categories[hub_category_key];
-      local clean_vcns = { [k]: cat.vcns[k] + {
+      local clean_vcns = if studio_mode then cat.vcns else { [k]: cat.vcns[k] + {
         load_balancers: {},
         security_lists: { [sl]: cat.vcns[k].security_lists[sl] + {
           ingress_rules: [rule for rule in cat.vcns[k].security_lists[sl].ingress_rules
