@@ -56,6 +56,9 @@ Template installation requirements:
   `PRIVATE_OPERATION_ROOT` and `PRIVATE_OUTPUTS_ROOT`.
 - Keep `config/model.jsonnet`, reviewed `config/.terraform.lock.hcl` and optional
   `config/firewall-bindings.json` in the private configuration repository.
+- Alternatively select `configuration: studio` and install exports/metadata as
+  described in [Studio import](studio-import.md); both modes share the same
+  selected-operation plan/apply flow.
 - The input output tree must already contain reviewed regional artifacts.
   Publish/replicate successful outputs before dispatching consumers.
 - Protect both environments and prohibit self-approval of foundation-apply.

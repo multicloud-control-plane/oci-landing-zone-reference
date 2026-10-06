@@ -32,4 +32,7 @@ jobs:
           python3 scripts/reference.py generate --output generated
           python3 scripts/reference.py validate --generated generated
           python3 scripts/check_contract.py --generated generated
+          python3 scripts/reference.py import-studio --source tests/fixtures/studio-hub-b.jsonnet --home-region eu-frankfurt-1 --landing-zone-environment shared --notification-email operations@example.com --output generated/studio-example
+          python3 scripts/reference.py validate --generated generated/studio-example
+          python3 scripts/check_contract.py --generated generated/studio-example
           python3 scripts/check_docs.py

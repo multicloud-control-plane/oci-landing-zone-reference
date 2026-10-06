@@ -1,0 +1,70 @@
+# Install only in the PRIVATE foundation configuration repository.
+# Producer outputs must be published and reviewed after successful applies.
+name: MCCP project foundation handoff
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        options: [dev, test, uat, prod]
+      project:
+        description: Project DNS name without repository prefix
+        required: true
+        type: string
+      region:
+        description: Declared OP02 region
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  handoff:
+    if: github.event.repository.private && vars.FOUNDATION_PROJECT_HANDOFF_READY == 'true' && github.ref == 'refs/heads/main'
+    environment: foundation-handoff
+    runs-on: ${{ fromJSON(vars.FOUNDATION_RUNNER_LABELS) }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: config-repo
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: multicloud-control-plane/oci-landing-zone-reference
+          ref: ${{ vars.REFERENCE_COMMIT }}
+          path: reference
+          persist-credentials: false
+      - name: Generate and validate the artifact package
+        shell: bash
+        env:
+          REFERENCE_COMMIT: ${{ vars.REFERENCE_COMMIT }}
+          OUTPUTS_ROOT: ${{ vars.PRIVATE_OUTPUTS_ROOT }}
+          PROJECT: ${{ inputs.project }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          REGION: ${{ inputs.region }}
+        run: |
+          set -euo pipefail
+          [[ "$REFERENCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ENVIRONMENT" =~ ^(dev|test|uat|prod)$ ]]
+          [[ "$PROJECT" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]]
+          [[ "$REGION" =~ ^[a-z]{2}-[a-z]+-[0-9]+$ ]]
+          test -n "$OUTPUTS_ROOT"
+          generated="$RUNNER_TEMP/generated-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          package="$RUNNER_TEMP/handoff-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 reference/scripts/reference.py generate --model config-repo/config/model.jsonnet --output "$generated"
+          python3 reference/scripts/reference.py handoff --generated "$generated" --environment "$ENVIRONMENT" --project "$PROJECT" --region "$REGION" \
+            --compartments "$OUTPUTS_ROOT/common/compartments_output.json" \
+            --network "$OUTPUTS_ROOT/workload_$ENVIRONMENT/$REGION/network_output.json" \
+            --source-repository "$GITHUB_REPOSITORY" --source-workflow "$GITHUB_WORKFLOW" \
+            --source-run "$GITHUB_RUN_ID" --source-commit "$GITHUB_SHA" --output "$package"
+          python3 reference/scripts/reference.py validate-handoff --generated "$generated" \
+            --handoff-json "$package/project-foundation-handoff.json" \
+            --handoff-markdown "$package/environments/$ENVIRONMENT/environment_information.md" \
+            --source-repository "$GITHUB_REPOSITORY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: project-foundation-handoff-${{ inputs.environment }}-${{ inputs.project }}-${{ inputs.region }}
+          path: ${{ runner.temp }}/handoff-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+          retention-days: 7

@@ -15,8 +15,9 @@ if __name__ == "__main__":
     generated = Path(args.generated)
     catalog = read_json(generated / "catalog.json")
     paths = {path for s in catalog["stacks"] for path in s["configurations"].values()}
+    paths.update(catalog['project_onboarding'].get('baselines', []))
     for path in paths:
         unsupported = set(read_json(checked_path(generated, path))) - accepted
         if unsupported:
             raise ContractError(f"unsupported facade families in {path}: {unsupported}")
-    print(f"Facade family contract passed for {len(paths)} complete configuration sets")
+    print(f"Facade family contract passed for {len(paths)} foundation configurations/project seeds")

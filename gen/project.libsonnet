@@ -1,6 +1,8 @@
 // Projection only. Resource definitions remain owned by the pinned OE libraries.
 local lz = import 'landing_zone.libsonnet';
 local context = import 'render_context.libsonnet';
+local tbac = import 'tbac.libsonnet';
+local runner_policies = import 'mccp_runner.libsonnet';
 
 local select_fields(obj, predicate) = {
   [k]: obj[k] for k in std.objectFields(obj) if predicate(k, obj[k])
@@ -15,10 +17,11 @@ local output_reference(section, key) = 'output://network_resources/' + section +
 
 function(model)
   assert std.objectHas(model.regions, model.home_region) : 'home_region must exist in regions';
+  local studio_mode = std.objectHas(model, 'studio_configs');
   local region_names = std.objectFields(model.regions);
   local raw(region) =
     local r = model.regions[region];
-    {
+    if studio_mode then model.studio_configs[region] else {
       region: region, region_short_name: r.short_name, realm: 'oc1', cis_level: 1,
       hub: { kind: 'hub_b', network: { vcn: r.hub } },
       environments: {
@@ -34,6 +37,12 @@ function(model)
     };
   local rendered = { [r]: lz(raw(r)) for r in region_names };
   local home = rendered[model.home_region];
+  local n_home = context.from_raw_config(raw(model.home_region)).n;
+  local project_group_keys = [n_home.key_global('GRP', [env, p, 'ADMIN'])
+    for env in std.objectFields(model.projects) for p in std.objectFields(model.projects[env])];
+  local project_policy_keys = [n_home.key_global('PCY', [env, p, 'ADMIN'] + suffix)
+    for env in std.objectFields(model.projects) for p in std.objectFields(model.projects[env])
+    for suffix in [[], ['NET'], ['SEC']]];
   // Any IAM difference outside policy statements must be handled deliberately.
   local global_iam = std.foldl(function(acc, r)
     local other = rendered[r].iam;
@@ -57,7 +66,29 @@ function(model)
     } for k in std.objectFields(document.notifications_configuration.topics)
   } };
   local home_obs = home.observability_cis1;
-  local common = global_iam + home.governance + {
+  local project_iam = global_iam + {
+    compartments_configuration+: { compartments+: { 'CMP-LANDINGZONE-KEY'+: { children+: {
+      [n_home.key_global('CMP', [env])]+: { children+: {
+        [n_home.key_global('CMP', [env, 'PROJECTS'])]+: { children: {
+          [tbac.project_key(n_home, env, p)]: tbac.project_compartment(n_home, env, p)
+          for p in std.objectFields(model.projects[env])
+        } },
+      } } for env in std.objectFields(model.projects)
+    } } } },
+    identity_domain_groups_configuration+: { groups:
+      select_fields(global_iam.identity_domain_groups_configuration.groups, function(k, v) !std.member(project_group_keys, k)) +
+      std.foldl(function(acc, env) acc + std.foldl(function(groups, p) groups +
+        tbac.project_groups(n_home, env, p).groups, std.objectFields(model.projects[env]), {}), std.objectFields(model.projects), {}),
+    },
+    policies_configuration+: { supplied_policies:
+      select_fields(global_iam.policies_configuration.supplied_policies, function(k, v) !std.member(project_policy_keys, k)) +
+      tbac.common_policies + std.foldl(function(acc, env) acc + tbac.environment_policies(n_home, env) +
+        if std.objectHas(model, 'project_runner_dynamic_group') && model.project_runner_dynamic_group != null then
+          runner_policies(env, n_home, model.project_runner_dynamic_group) else {}, std.objectFields(model.projects), {}),
+    },
+  };
+  local common = project_iam + home.governance + {
+    tags_configuration+: { namespaces+: tbac.governance.tags_configuration.namespaces },
     cloud_guard_configuration: home.security_cis1_pre.cloud_guard_configuration,
     security_zones_configuration: home.security_cis1_pre.security_zones_configuration + {
       recipes: select_fields(home.security_cis1_pre.security_zones_configuration.recipes,
@@ -92,7 +123,7 @@ function(model)
     local hub_network(stage) =
       local source = if stage == 'bootstrap' then full.network_pre else full.network;
       local cat = source.network_configuration.network_configuration_categories[hub_category_key];
-      local clean_vcns = { [k]: cat.vcns[k] + {
+      local clean_vcns = if studio_mode then cat.vcns else { [k]: cat.vcns[k] + {
         load_balancers: {},
         security_lists: { [sl]: cat.vcns[k].security_lists[sl] + {
           ingress_rules: [rule for rule in cat.vcns[k].security_lists[sl].ingress_rules
@@ -233,12 +264,32 @@ function(model)
       local cmp = n.key_global('CMP', ['SHARED', p]);
       own_network(n.key('VCN', ['SHARED', 'PLATFORM', p]), cmp) + platform_obs('shared', p, cmp) + scanning(['SHARED', p], cmp, cmp)
       for p in std.objectFields(r.shared_platforms) };
+    // Project workload declarations are not foundation stack configurations.
+    local project_nsg_docs = {
+      ['projects/' + env + '-' + p + '/' + region + '/project-nsgs.json']:
+        local vcn_key = n.key('VCN', [env, 'PROJECTS']);
+        local category = [categories[k] for k in std.objectFields(categories) if std.objectHas(categories[k].vcns, vcn_key)][0];
+        local project_cmp = n.key_global('CMP', [env, p]);
+        local groups = select_fields(category.vcns[vcn_key].network_security_groups, function(k, v) v.compartment_id == project_cmp);
+        { network_configuration: {
+          default_enable_cis_checks: false,
+          network_configuration_categories: {
+            [env + '-' + p]: { inject_into_existing_vcns: {
+              [vcn_key]: { vcn_id: 'binding://project-vcn-id', network_security_groups: {
+                [k]: groups[k] + { compartment_id: 'binding://project-infra-compartment-id' }
+                for k in std.objectFields(groups)
+              } },
+            } },
+          },
+        } }
+      for env in std.objectFields(r.environments) for p in std.objectFields(model.projects[env])
+    };
     local env_platform_docs = std.foldl(function(acc, env) acc + {
       ['workload_' + env + '/' + region + '/platform_' + p + '/config.json']:
         local cmp = n.key_global('CMP', [env, p]);
         own_network(n.key('VCN', [env, 'PLATFORM', p]), cmp) + platform_obs(env, p, cmp) + scanning([env, p], cmp, cmp)
       for p in std.objectFields(r.environments[env].platforms)
     }, std.objectFields(r.environments), {});
-    hub_docs + env_docs + shared_platform_docs + env_platform_docs;
+    hub_docs + env_docs + shared_platform_docs + env_platform_docs + project_nsg_docs;
   { 'common/config.json': common } +
   std.foldl(function(acc, r) acc + project_region(r), region_names, {})

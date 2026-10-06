@@ -16,8 +16,14 @@ nonempty directories to prevent stale configuration retention. All regions
 must share one global hierarchy; IAM outside policy statements must agree.
 Regional service-policy statements are combined in the single IAM configuration.
 
-The emitted `catalog.json` is reference-owned orchestration metadata, not an
+The emitted `catalog.json` (version 2) is reference-owned orchestration metadata, not an
 Orchestrator configuration family. Each `config.json` is a complete input set.
+
+Use [Studio import](studio-import.md) for exported Studio designs. Its normalized
+model retains original network choices and project NSGs. Both source modes
+emit NSG seeds outside foundation states under `projects/`, for the project's
+schema-3 handoff and reviewed workload deployment. Catalog validation includes
+seed ownership; project NSGs cannot also belong to a foundation configuration.
 
 ## Initial order
 

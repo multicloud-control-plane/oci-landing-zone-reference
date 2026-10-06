@@ -4,6 +4,11 @@ name: One foundation operation
 on:
   workflow_dispatch:
     inputs:
+      configuration:
+        description: Source model or Landing Zone Studio exports
+        default: model
+        type: choice
+        options: [model, studio]
       stack:
         description: Catalog stack ID
         required: true
@@ -57,6 +62,10 @@ jobs:
           STATE_BUCKET: ${{ vars.STATE_BUCKET }}
           STATE_NAMESPACE: ${{ vars.STATE_NAMESPACE }}
           TENANCY: ${{ vars.OCI_TENANCY_OCID }}
+          CONFIGURATION: ${{ inputs.configuration }}
+          HOME_REGION: ${{ vars.HOME_REGION }}
+          LZ_ENVIRONMENT: ${{ vars.LANDING_ZONE_ENVIRONMENT }}
+          NOTIFICATION_EMAIL: ${{ vars.NOTIFICATION_EMAIL }}
         run: |
           set -euo pipefail
           [[ "$REFERENCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
@@ -65,7 +74,18 @@ jobs:
           test ! -e "$job_root"
           mkdir -p "$job_root"
           chmod 700 "$job_root"
-          python3 reference/scripts/reference.py generate --model config-repo/config/model.jsonnet --output "$job_root/generated"
+          if [ "$CONFIGURATION" = studio ]; then
+            shopt -s nullglob
+            exports=(config-repo/config/studio/*.zip)
+            test "${#exports[@]}" -gt 0
+            source_args=()
+            for export_path in "${exports[@]}"; do
+              source_args+=(--source "$export_path")
+            done
+            python3 reference/scripts/reference.py import-studio "${source_args[@]}" --home-region "$HOME_REGION" --landing-zone-environment "$LZ_ENVIRONMENT" --notification-email "$NOTIFICATION_EMAIL" --output "$job_root/generated"
+          else
+            python3 reference/scripts/reference.py generate --model config-repo/config/model.jsonnet --output "$job_root/generated"
+          fi
           binding_args=()
           if [ "$STAGE" = final ]; then
             binding_args=(--bindings config-repo/config/firewall-bindings.json)

@@ -30,3 +30,20 @@ double ownership. Test recovery before production. Injected attachments have
 different tag inheritance from DRG-owned attachments; compare effective values.
 Compartment-depth changes need explicit address mapping. Keep state/plan files
 out of public Git and PKM.
+
+## Earlier reference to MCCP contracts
+
+Regenerate with catalog version 2; the schema-3 handoff requires separate
+APP/DB/INFRA targets. Retain project root OCIDs. Inventory memberships before
+replacing the earlier per-project admin groups/policies with the four TBAC
+groups and generic policies; review access continuity separately.
+
+Imported project NSGs previously managed by OP02 now belong to project GitOps.
+Transfer ownership under a coordinated freeze before deploying their seed.
+The seed targets INFRA rather than the earlier project root compartment:
+state transfer alone does not move an OCI resource. Verify the supported
+compartment-change behavior and both plans in test; stop unexpected replacement.
+Changing resource placement and transferring state are separate decisions.
+Keep keys and rules intact; never apply the reduced OP02 config while it still
+owns those NSGs in state. Existing project manifests remain the editable source
+after the initial handoff and must not be overwritten by regenerated seeds.

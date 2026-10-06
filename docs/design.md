@@ -41,7 +41,10 @@ replacement blueprint product or a claim of a complete CIS certification.
   CLI workflow. Runtime data, state, plans and handoffs stay outside public Git.
 - OP04 handoff: deterministic project boundary derived from reviewed global IAM
   and regional environment outputs. It includes no credentials and is validated
-  against the declared environment/region/project.
+  against the declared environment/region/project. The pinned MCCP adapter
+  supplies official TBAC roles and the schema-3 renderer. Separate project NSG
+  seeds preserve rules, bind to INFRA and use the existing VCN. Consumer validation
+  checks actual catalog state owners; no separate OP04 IAM state is invented.
 - CI: credential-free generation and contract tests run on hosted runners.
   The public reference does not run privileged self-hosted jobs on pull requests.
   Customer deployment automation requires private installation and protected

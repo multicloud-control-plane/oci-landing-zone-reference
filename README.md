@@ -30,6 +30,34 @@ state boundaries and handoff format differ: existing installations must follow
 the [migration procedure](docs/migration.md), rather than apply these generated
 configurations over their previous states.
 
+## Import from Landing Zone Studio
+
+Use [Studio](https://oci-landing-zones.github.io/oci-landing-zone-operating-entities/)
+to design the supported Hub B/CIS1/oc1 baseline, then import its ZIP:
+
+```bash
+python3 scripts/reference.py import-studio \
+  --source customer/studio-fra.zip \
+  --home-region eu-frankfurt-1 --landing-zone-environment shared \
+  --notification-email operations@example.com \
+  --output generated/studio-revision-001
+```
+
+Replace the example email with your approved operations address. Import checks
+the exported JSON against the pinned generator, preserves CIDRs/subnets/project
+NSGs, and produces operation configurations, source evidence and an import
+report. Review the reported ownership/control adjustments before deployment.
+Other hubs, CIS2, environment Security Zones and workload extensions are
+explicitly rejected in this first version. See [Studio import](docs/studio-import.md).
+
+The [private workflow](templates/workflows/stack-plan-apply.yml) offers `model`
+or `studio` as the configuration source. The intended architecture is
+**Studio design → reference foundation deployment → MCCP project self-service**;
+MCCP already defines the schema-3 handoff and project-owned NSGs in INFRA.
+This reference reuses those contracts, emits project-owned NSG seeds and provides
+catalog-based handoff validation. Configure the private installation and verify
+end-to-end deployment. See [contracts and installation](docs/studio-mccp-flow.md).
+
 ## Operations
 
 | Operation | Scope and owner | Configuration/state boundary |
@@ -53,9 +81,11 @@ environments, regions and ownership. A VCN name alone does not determine it.
 - Shared `ops` and prod `data` platforms with their own network/observability
   footprint in each region. Application/database services are explicit platform
   extensions; these examples do not provision Exadata or a runner VM.
-- One `shop` project per workload environment; IAM is consolidated in OP00.
+- One `shop` project per workload environment with the MCCP TBAC root and
+  APP/DB/INFRA children; IAM is consolidated in OP00.
 - **11 states and 13 complete configuration sets.** Hub bootstrap and completion
-  share the same two hub states. Handoff publication has no Terraform state.
+  share the same two hub states. Four project NSG seeds are separate artifacts
+  for project deployment. Handoff publication has no Terraform state.
 
 ```mermaid
 flowchart TD
