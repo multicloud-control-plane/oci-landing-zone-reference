@@ -25,8 +25,8 @@ flowchart LR
     M --> P[Project repositories and Day 1 / Day 2]
 ```
 
-MCCP should request OP04 from foundation automation rather than create another
-IAM/state owner. Foundation publishes a handoff only after the actual resources
+Route MCCP OP04 requests to the selected foundation operation against common.
+Foundation publishes a handoff only after the actual resources
 and permissions exist. Project executors consume allowed compartments/networks
 and never acquire the foundation executor's privileges.
 
@@ -94,21 +94,48 @@ The earlier Cloud Operator `validate-handoff.py` fixes the old MVP state keys.
 For this foundation use the provided consumer gate with the protected generated
 catalog from the reviewed foundation revision:
 
+Set `HANDOFF_SOURCE_REPOSITORY` to the expected private foundation repository
+(`owner/repository`), verified against the protected run described in
+[project onboarding](project-onboarding.md#render-with-real-protected-run-evidence).
+
 ```bash
 python3 scripts/reference.py validate-handoff \
   --generated generated/revision-002 \
   --handoff-json handoffs/dev-billing-fra/project-foundation-handoff.json \
   --handoff-markdown handoffs/dev-billing-fra/environments/dev/environment_information.md \
-  --source-repository example/private-foundation
+  --source-repository "$HANDOFF_SOURCE_REPOSITORY"
 ```
 
 It validates schema 3, project/region/repository routing, source repository,
 distinct targets and matching Markdown; state provenance must match the actual
 catalog owners. OP04 records `common/terraform.tfstate`; OP02 records
-`workload_<environment>/<region>/terraform.tfstate`. Configure the selected
+`workload_<environment>/<region>/terraform.tfstate`. Manually configure the selected
 Cloud Operator installation to call these model/onboarding/handoff commands and
 this gate. The old foundation's installation is not changed by installing the
 reference, and its validator still applies to its own state layout.
+
+Cloud Operations reviews the selected installation's existing command/skill/job
+configuration and replaces its foundation command mapping through that
+installation's normal review process. There are no reference-defined MCCP UI
+installation fields or automatic installer. Use this mapping:
+
+| Installation action | Command/gate selected for this foundation |
+| --- | --- |
+| Generate approved source | `reference.py generate --model customer/config/model.jsonnet` with a new generated revision; initial Studio import/promotion is in [Getting started](getting-started.md) |
+| Onboard / retire project declaration | `onboard.py` on the canonical model, with explicit environment/project and candidate output; `--operation retirement` only after workload retirement |
+| Execute foundation change | `reference.py prepare` then the existing `runtime.py` helper (or ORM) against catalog owners; OP04 IAM uses common |
+| Produce schema-3 package | `reference.py handoff` using verified producer outputs and genuine protected repository/workflow/run/commit evidence |
+| Accept this foundation's package | `reference.py validate-handoff` with the matching protected catalog, both JSON/Markdown and expected source repository |
+| Publish approved package | Operator performs the human handoff PR and separate project-owned NSG workload PR in [project onboarding](project-onboarding.md) |
+
+Run from the approved reference checkout (scripts are under `scripts/`);
+installation runners may use their own absolute checkout paths. Verify the
+mapping's model path, revision, identity, state targets and consumer gate in a
+test installation before enabling requests. Keep the pinned canonical renderer
+instead of maintaining local handoff Markdown/schema code. The
+[optional artifact-only workflow](private-workflows.md#artifact-only-project-handoff)
+supplies protected-run provenance when no existing job does. Publication stays
+explicit and reviewed; installing a template does not wire MCCP to this reference.
 
 For existing deployments, transfer NSG state ownership and review any compartment
 move before publishing the project seed. Do not deploy a seed over NSGs already

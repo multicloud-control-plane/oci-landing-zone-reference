@@ -10,20 +10,15 @@ dependency preparation, project onboarding/handoff and credential-free tests.
 
 ## Start here
 
-Requirements for source generation: Python 3.10+, Git and Jsonnet 0.20+.
+Follow [Getting started](docs/getting-started.md) to install/check tools, clone,
+generate and validate the synthetic `generated/demo-revision-001`, then establish
+the private source at `customer/config/model.jsonnet` and a reviewed
+`generated/revision-001`. It owns the setup instructions for both source modes.
 
-```bash
-python3 scripts/reference.py generate --output generated
-python3 scripts/reference.py validate --generated generated
-python3 -m unittest discover -s tests -v
-python3 scripts/check_contract.py --generated generated
-```
-
-Generation fetches and verifies the immutable OE commit in
-[upstream.lock.json](upstream.lock.json). The checked-in example is synthetic;
-replace it with a reviewed source model in a customer-controlled private
-repository before deployment. Keep generated configurations separate from
-their source and use a new output directory for each revision.
+Simple repository, runner and bucket setup and reviewed publication are manual.
+Use the existing preparation and runtime helpers for dependency binding, pinned
+workdirs, provider aliases and state keys. [Private workflows](docs/private-workflows.md)
+are optional; resource definitions and rendering remain upstream-owned.
 
 This reference replaces the repository's earlier single-region preview. Its
 state boundaries and handoff format differ: existing installations must follow
@@ -33,17 +28,7 @@ configurations over their previous states.
 ## Import from Landing Zone Studio
 
 Use [Studio](https://oci-landing-zones.github.io/oci-landing-zone-operating-entities/)
-to design the supported Hub B/CIS1/oc1 baseline, then import its ZIP:
-
-```bash
-python3 scripts/reference.py import-studio \
-  --source customer/studio-fra.zip \
-  --home-region eu-frankfurt-1 --landing-zone-environment shared \
-  --notification-email operations@example.com \
-  --output generated/studio-revision-001
-```
-
-Replace the example email with your approved operations address. Import checks
+to design the supported Hub B/CIS1/oc1 baseline. Import checks
 the exported JSON against the pinned generator, preserves CIDRs/subnets/project
 NSGs, and produces operation configurations, source evidence and an import
 report. Review the reported ownership/control adjustments before deployment.
@@ -105,11 +90,12 @@ flowchart TD
 
 1. Agree operation ownership, IAM governance and the home/regional split using
    [the operating model](docs/operating-model.md).
-2. Review the source model and generate the private configuration set using
-   [generation and dependencies](docs/generation-and-dependencies.md).
+2. Follow [Getting started](docs/getting-started.md) for the private source/revision,
+   then [generation and dependencies](docs/generation-and-dependencies.md) for
+   `common/complete`, regional stages and producer publication.
 3. Use [Resource Manager](docs/resource-manager.md) with private Object Storage,
-   or the [Terraform CLI runtime](docs/terraform-cli.md) in an approved private
-   pipeline. Each job manages one selected stack; no cascading applies.
+   or the [Terraform CLI runtime](docs/terraform-cli.md) on an approved private
+   runner. Each execution manages one selected stack; no cascading applies.
 4. Follow [project onboarding](docs/project-onboarding.md) and
    [Day 2 operations](docs/day2.md). For an existing Landing Zone, use
    [the migration procedure](docs/migration.md).

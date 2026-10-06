@@ -26,7 +26,7 @@ approved operation permissions plus private input/output object access.
 | `save_output = true`, `output_format = "json"` | Official outputs |
 | `oci_object_prefix` | Unique producer prefix |
 
-Use `--stage bootstrap` or `--stage final --bindings customer/fra-bindings.json`
+Use `--stage bootstrap` or `--stage final --bindings customer/config/firewall-bindings.json`
 for hub stages. Download actual files from `outputs/<stack-id>/` into the local
 preparation tree. Verify persistence permissions and published artifacts.
 
