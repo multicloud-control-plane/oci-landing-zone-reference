@@ -6,7 +6,9 @@ from reference import ROOT, ContractError, read_json
 
 count = 0
 for path in ROOT.rglob("*.md"):
-    if any(part in {".git", ".cache", "generated", ".runtime"} for part in path.relative_to(ROOT).parts):
+    if any(part in {".git", ".cache", "generated", ".runtime", ".agents", ".codex",
+                   ".specify", "specs", ".internal", "superpowers"}
+           for part in path.relative_to(ROOT).parts):
         continue
     text = path.read_text()
     if sum(line.startswith("```") for line in text.splitlines()) % 2:
