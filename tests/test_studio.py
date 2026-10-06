@@ -51,7 +51,7 @@ class StudioTests(unittest.TestCase):
             self.assertEqual(0, result.returncode, result.stderr)
             out = root / 'generated'
             catalog = ref.read_json(out / 'catalog.json')
-            documents = {p: ref.read_json(out / p) for s in catalog['stacks'] for p in s['configurations'].values()}
+            documents = ref.load_documents(out, catalog)
             self.assertEqual(5, len(catalog['stacks']))
             self.assertGreater(ref.validate(catalog, documents), 100)
             original = self.snapshots['network.json']['network_configuration']['network_configuration_categories']
@@ -63,12 +63,24 @@ class StudioTests(unittest.TestCase):
                     for category in categories.values():
                         actual_vcns.update(category['vcns'])
             project_nsgs = []
+            delegated = {}
+            for path in catalog['project_onboarding']['baselines']:
+                for category in documents[path]['network_configuration']['network_configuration_categories'].values():
+                    for key, vcn in category['inject_into_existing_vcns'].items():
+                        delegated.setdefault(key, {}).update(vcn['network_security_groups'])
             for category in original.values():
                 for key, vcn in category['vcns'].items():
                     with self.subTest(vcn=key):
                         self.assertEqual(vcn['cidr_blocks'], actual_vcns[key]['cidr_blocks'])
                         self.assertEqual(vcn['subnets'], actual_vcns[key]['subnets'])
-                        self.assertEqual(vcn.get('network_security_groups'), actual_vcns[key].get('network_security_groups'))
+                        expected = vcn.get('network_security_groups', {})
+                        if key in delegated:
+                            self.assertFalse(actual_vcns[key]['network_security_groups'])
+                            self.assertEqual(set(expected), set(delegated[key]))
+                            for nkey, nsg in expected.items():
+                                self.assertEqual(nsg | {'compartment_id': 'binding://project-infra-compartment-id'}, delegated[key][nkey])
+                        else:
+                            self.assertEqual(expected, actual_vcns[key].get('network_security_groups', {}))
                         project_nsgs += list(vcn.get('network_security_groups', {}))
             self.assertTrue(project_nsgs)
             self.assertEqual(self.source, (out / 'studio-source/eu-frankfurt-1/config.jsonnet').read_text())
@@ -83,7 +95,13 @@ class StudioTests(unittest.TestCase):
             _, onboarded = ref.evaluate(root / 'onboarded.jsonnet', self.upstream)
             self.assertIn('CMP-LZ-PROD-BILLING-KEY', ref.resource_keys(onboarded['common/config.json']))
             spoke_keys = ref.resource_keys(onboarded['workload_prod/eu-frankfurt-1/config.json'])
-            self.assertTrue(any(k.startswith('NSG-') and 'BILLING' in k for k in spoke_keys))
+            self.assertFalse(any(k.startswith('NSG-') and 'BILLING' in k for k in spoke_keys))
+            self.assertEqual(documents['workload_prod/eu-frankfurt-1/config.json'], onboarded['workload_prod/eu-frankfurt-1/config.json'])
+            self.assertIn('projects/prod-billing/eu-frankfurt-1/project-nsgs.json', onboarded)
+            for stack in catalog['stacks']:
+                if stack['scope'] == 'regional':
+                    for path in stack['configurations'].values():
+                        self.assertEqual(documents[path], onboarded[path], path)
             synthetic_outputs(catalog, documents, root / 'outputs')
             for stack in catalog['stacks']:
                 for stage in stack['configurations']:

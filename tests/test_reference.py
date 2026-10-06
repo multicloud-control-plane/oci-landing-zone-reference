@@ -1,15 +1,14 @@
 import copy
-import importlib.util
 import json
 import os
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("reference", ROOT / "scripts/reference.py")
-ref = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(ref)
+sys.path.insert(0, str(ROOT / 'scripts'))
+import reference as ref
 
 
 class ProjectionTests(unittest.TestCase):
@@ -227,30 +226,70 @@ class DependencyTests(unittest.TestCase):
 class HandoffTests(unittest.TestCase):
     def setUp(self):
         self.catalog = {"regions": ["eu-frankfurt-1"], "region_codes": {"eu-frankfurt-1": "FRA"},
-                        "project_onboarding": {"projects": {"prod": {"shop": {}}}}}
+                        "stacks": [{"id": "common", "scope": "global", "state_key": "common/terraform.tfstate"},
+                                   {"id": "workload_prod/eu-frankfurt-1", "operation": "OP02", "region": "eu-frankfurt-1", "state_key": "workload_prod/eu-frankfurt-1/terraform.tfstate"}],
+                        "project_onboarding": {"iam_stack": "common", "projects": {"prod": {"shop": {}}}}}
         self.compartments = {"compartments": {"CMP-LZ-PROD-SHOP-KEY": {"id": "ocid1.compartment.oc1..project"}}}
+        children = {f'CMP-LZ-PROD-SHOP-{role}-KEY': {} for role in ('APP', 'DB', 'INFRA')}
+        for role in ('APP', 'DB', 'INFRA'):
+            self.compartments['compartments'][f'CMP-LZ-PROD-SHOP-{role}-KEY'] = {'id': f'ocid1.compartment.oc1..{role}'}
+        self.common = {'compartments_configuration': {'compartments': {'CMP-LANDINGZONE-KEY': {'children': {
+            'CMP-LZ-PROD-KEY': {'children': {'CMP-LZ-PROD-PROJECTS-KEY': {'children': {'CMP-LZ-PROD-SHOP-KEY': {'children': children}}}}}
+        }}}}}
         self.network = {"network_resources": {
             "vcns": {"VCN-FRA-LZ-PROD-PROJECTS-KEY": {"id": "ocid1.vcn.oc1.eu-frankfurt-1.prod"}},
-            "subnets": {"APP": {"id": "ocid1.subnet.oc1.eu-frankfurt-1.app", "vcn_id": "ocid1.vcn.oc1.eu-frankfurt-1.prod"},
-                        "OTHER": {"id": "ocid1.subnet.oc1.eu-frankfurt-1.other", "vcn_id": "different"}},
+            "subnets": {f'SN-FRA-LZ-PROD-{role}-KEY': {"id": f"ocid1.subnet.oc1.eu-frankfurt-1.{role.lower()}", "vcn_id": "ocid1.vcn.oc1.eu-frankfurt-1.prod"} for role in ('WEB', 'APP', 'DB', 'INFRA')},
         }}
+        self.network['network_resources']['subnets']['OTHER'] = {'id': 'ocid1.subnet.oc1.eu-frankfurt-1.other', 'vcn_id': 'different'}
+        self.config = {'network_configuration': {'network_configuration_categories': {'prod': {'vcns': {
+            'VCN-FRA-LZ-PROD-PROJECTS-KEY': {'display_name': 'prod', 'cidr_blocks': ['10.1.0.0/21'], 'subnets': {
+                f'SN-FRA-LZ-PROD-{role}-KEY': {'display_name': role, 'cidr_block': f'10.1.{i}.0/24'} for i, role in enumerate(('WEB', 'APP', 'DB', 'INFRA'))
+            }}
+        }}}}}
+        self.source = {'repository': 'example/foundation', 'workflow': 'test', 'run': '123', 'commit': 'a' * 40}
+
+    def invoke(self, project='shop'):
+        return ref.handoff(self.catalog, 'prod', project, 'eu-frankfurt-1', self.compartments, self.network, self.common, self.config, self.source)
 
     def test_project_handoff_contains_only_assigned_network(self):
-        value = ref.handoff(self.catalog, "prod", "shop", "eu-frankfurt-1", self.compartments, self.network)
-        self.assertEqual(["ocid1.subnet.oc1.eu-frankfurt-1.app"], value["subnet_ids"])
-        self.assertFalse(value["constraints"]["may_manage_iam"])
-        self.assertFalse(value["constraints"]["may_manage_hub"])
-        self.assertEqual("prod-shop", value["workload_repository"])
+        value = self.invoke()
+        self.assertNotIn('ocid1.subnet.oc1.eu-frankfurt-1.other', value['subnets'].values())
+        self.assertEqual(3, value['schema_version'])
+        self.assertEqual("prod-shop", value["target_repository"])
         self.assertNotIn("credential", json.dumps(value).lower())
 
     def test_unknown_project_cannot_receive_a_handoff(self):
         with self.assertRaisesRegex(ref.ContractError, "not been onboarded"):
-            ref.handoff(self.catalog, "prod", "other", "eu-frankfurt-1", self.compartments, self.network)
+            self.invoke('other')
 
     def test_vcn_from_other_region_cannot_receive_a_handoff(self):
         self.network["network_resources"]["vcns"]["VCN-FRA-LZ-PROD-PROJECTS-KEY"]["id"] = "ocid1.vcn.oc1.eu-amsterdam-1.wrong"
         with self.assertRaisesRegex(ref.ContractError, "region mismatch"):
-            ref.handoff(self.catalog, "prod", "shop", "eu-frankfurt-1", self.compartments, self.network)
+            self.invoke()
+
+    def test_missing_child_output_and_aliased_targets_are_rejected(self):
+        original = copy.deepcopy(self.compartments)
+        del self.compartments['compartments']['CMP-LZ-PROD-SHOP-DB-KEY']
+        with self.assertRaisesRegex(ref.ContractError, 'missing/invalid'):
+            self.invoke()
+        self.compartments = original
+        self.compartments['compartments']['CMP-LZ-PROD-SHOP-DB-KEY']['id'] = self.compartments['compartments']['CMP-LZ-PROD-SHOP-APP-KEY']['id']
+        with self.assertRaisesRegex(ref.ContractError, 'distinct'):
+            self.invoke()
+
+    def test_incomplete_or_wrong_vcn_subnets_are_rejected(self):
+        key = 'SN-FRA-LZ-PROD-APP-KEY'
+        original = self.network['network_resources']['subnets'].pop(key)
+        with self.assertRaisesRegex(ref.ContractError, 'missing/invalid'):
+            self.invoke()
+        self.network['network_resources']['subnets'][key] = original | {'vcn_id': 'different'}
+        with self.assertRaisesRegex(ref.ContractError, 'region/VCN'):
+            self.invoke()
+
+    def test_handoff_requires_exact_deployment_provenance(self):
+        self.source['commit'] = 'main'
+        with self.assertRaisesRegex(ref.ContractError, 'provenance'):
+            self.invoke()
 
 
 if __name__ == "__main__":

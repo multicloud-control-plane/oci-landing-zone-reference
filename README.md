@@ -54,8 +54,9 @@ The [private workflow](templates/workflows/stack-plan-apply.yml) offers `model`
 or `studio` as the configuration source. The intended architecture is
 **Studio design → reference foundation deployment → MCCP project self-service**;
 MCCP already defines the schema-3 handoff and project-owned NSGs in INFRA.
-This reference still needs adaptation to those contracts and end-to-end
-validation. See [contracts and implementation gaps](docs/studio-mccp-flow.md).
+This reference reuses those contracts, emits project-owned NSG seeds and provides
+catalog-based handoff validation. Configure the private installation and verify
+end-to-end deployment. See [contracts and installation](docs/studio-mccp-flow.md).
 
 ## Operations
 
@@ -80,9 +81,11 @@ environments, regions and ownership. A VCN name alone does not determine it.
 - Shared `ops` and prod `data` platforms with their own network/observability
   footprint in each region. Application/database services are explicit platform
   extensions; these examples do not provision Exadata or a runner VM.
-- One `shop` project per workload environment; IAM is consolidated in OP00.
+- One `shop` project per workload environment with the MCCP TBAC root and
+  APP/DB/INFRA children; IAM is consolidated in OP00.
 - **11 states and 13 complete configuration sets.** Hub bootstrap and completion
-  share the same two hub states. Handoff publication has no Terraform state.
+  share the same two hub states. Four project NSG seeds are separate artifacts
+  for project deployment. Handoff publication has no Terraform state.
 
 ```mermaid
 flowchart TD

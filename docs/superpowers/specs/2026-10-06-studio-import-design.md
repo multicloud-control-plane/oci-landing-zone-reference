@@ -45,9 +45,31 @@ Publish a PR with passing offline CI; retain mandatory independent review.
 
 ## MCCP contract review — 2026-10-06
 
-The existing MCCP foundation at commit
-`9b4033267af881e65fe8c2b212f220b2804cac09` already defines schema-3 handoff,
-APP/DB/INFRA project targets, and project-owned NSGs in INFRA, excluded from
-OP02. Importer preservation of NSGs in OP02 is a reference compatibility gap;
-it does not reopen the ownership decision. Reuse the existing contracts in a
-subsequent integration adaptation; see [the reviewed boundary](../../studio-mccp-flow.md).
+The user approved adapting the reference to the established MCCP contract.
+Reuse the pinned public foundation's TBAC adapter and schema-3 renderer.
+Project IAM stays in common, with the project root and APP/DB/INFRA children;
+remove superseded per-project admin groups/policies. Publish the official TBAC
+tag namespace and generic environment policies in common. Runner extensions
+reuse the existing fixed three-policy model only for an explicitly configured
+existing dynamic group; the reference does not provision a project runner.
+
+Generate project NSG seeds separately from foundation configurations, retaining
+original keys, names and rules. Seeds inject into the existing environment VCN
+and bind to the project's INFRA OCID at handoff. Generation and validation must
+reject multiple state owners. Subsequent onboarding changes common IAM and
+project seeds, never OP02. Retirement removes project declarations only after
+the separate project workload retirement process.
+
+Handoff generation requires declared project/region, deployed common and OP02
+outputs, exact four subnet roles and source repository/workflow/run/commit.
+Emit schema-3 JSON, canonical Markdown path and a separately reviewed project
+NSG manifest into an empty package directory. Record actual common/regional
+state keys. Reject missing/aliased children, wrong-region/mismatched VCN/subnets,
+unreviewed hierarchy, malformed provenance and overwriting existing artifacts.
+No cloud execution occurs during generation.
+
+The installed MCCP Cloud Operator validator currently hard-codes the earlier
+foundation's state paths. Consumer adaptation must validate expected state
+owners from the selected installation; never falsify state provenance to pass
+the earlier validator. The deployed end-to-end connection requires a private
+installation and OCI acceptance. See [the contract](../../studio-mccp-flow.md).

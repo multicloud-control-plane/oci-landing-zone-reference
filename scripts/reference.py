@@ -85,8 +85,12 @@ def locked_checkout(name, cache):
 def evaluate(model_path, upstream):
     model_path = Path(model_path).resolve()
     model = json.loads(run(["jsonnet", str(model_path)]))
+    from mccp import validate_model
+    validate_model(model)
+    mccp = locked_checkout("mccp_foundation", ROOT / ".cache")
     result = json.loads(run([
         "jsonnet", "-J", str(ROOT / "gen"), "-J", str(Path(upstream) / "gen"),
+        "-J", str(upstream), "-J", str(mccp / "config"),
         "--tla-code-file", f"model={model_path}", str(ROOT / "gen/main.jsonnet"),
     ]))
     return model, result
@@ -96,6 +100,8 @@ def make_catalog(model, documents):
     stacks = {}
     for file_path in sorted(documents):
         parts = Path(file_path).parts
+        if parts[0] == "projects":
+            continue
         if parts[0] == "common":
             stack_id, operation, region, environment = "common", "OP00", model["home_region"], None
             stage = "complete"
@@ -132,13 +138,15 @@ def make_catalog(model, documents):
                 if s["region"] == stack["region"] and s["operation"] in {"OP02", "OP03"}
             ]
     return {
-        "format_version": 1, "iam_pattern": "consolidated", "home_region": model["home_region"],
+        "format_version": 2, "iam_pattern": "consolidated", "home_region": model["home_region"],
         "regions": sorted(model["regions"]),
         "region_codes": {r: model["regions"][r]["short_name"].upper() for r in model["regions"]},
         "stacks": list(stacks.values()),
         "project_onboarding": {
             "operation": "OP04", "writer_team": "cloud-operations", "iam_stack": "common",
             "projects": model["projects"], "handoff_state": None,
+            "baselines": sorted(p for p in documents if p.startswith("projects/")),
+            "handoff_schema_version": 3, "nsg_owner": "project-gitops",
         },
     }
 
@@ -148,7 +156,7 @@ def resource_keys(document):
     def visit(value, parent=None):
         if isinstance(value, dict):
             for key, child in value.items():
-                if key.endswith("-KEY") and isinstance(child, dict) and parent != "inject_into_existing_drgs":
+                if key.endswith("-KEY") and isinstance(child, dict) and parent not in {"inject_into_existing_drgs", "inject_into_existing_vcns"}:
                     result.add(key)
                 visit(child, key)
         elif isinstance(value, list):
@@ -160,6 +168,8 @@ def resource_keys(document):
 
 def validate(catalog, documents):
     errors, owned, keys, prefixes, stack_ids = [], {}, set(), set(), set()
+    if catalog.get('format_version') != 2:
+        errors.append('catalog version 2 required; regenerate with the reviewed reference')
     if catalog.get("iam_pattern") != "consolidated":
         errors.append("this implementation requires consolidated IAM")
     for stack in catalog["stacks"]:
@@ -187,12 +197,22 @@ def validate(catalog, documents):
             if "service_connectors_configuration" in document:
                 errors.append(f"nested IAM needs a separate governed contract: {path}")
         canonical = documents[stack["configurations"].get("final", stack["configurations"].get("complete"))]
+        seen_compartments = set()
+        def check_compartments(compartments):
+            for key, value in compartments.items():
+                if key in seen_compartments:
+                    errors.append(f'duplicate compartment logical key: {key}: {sid}')
+                seen_compartments.add(key)
+                check_compartments(value.get('children', {}))
+        check_compartments(canonical.get('compartments_configuration', {}).get('compartments', {}))
         for key in resource_keys(canonical):
             token = (stack["scope"] if stack["scope"] == "global" else stack["region"], key)
             if token in owned:
                 errors.append(f"resource key has two owners: {key}: {owned[token]} and {sid}")
             owned[token] = sid
     by_id = {s["id"]: s for s in catalog["stacks"]}
+    from mccp import validate_baselines
+    validate_baselines(catalog, documents, owned, errors)
     for stack in catalog["stacks"]:
         for dependency in stack["requires"] + stack.get("completion_requires", []):
             if dependency not in by_id:
@@ -302,7 +322,7 @@ def output_documents(catalog, stack, stage, output_root):
 def prepare(generated, stack_id, stage, output_root, destination, runtime, bucket=None, bindings=None):
     generated = Path(generated).resolve()
     catalog = read_json(generated / "catalog.json")
-    documents = {p: read_json(checked_path(generated, p)) for s in catalog["stacks"] for p in s["configurations"].values()}
+    documents = load_documents(generated, catalog)
     validate(catalog, documents)
     stacks = {s["id"]: s for s in catalog["stacks"]}
     if stack_id not in stacks:
@@ -341,38 +361,16 @@ def prepare(generated, stack_id, stage, output_root, destination, runtime, bucke
     return variables
 
 
-def handoff(catalog, environment, project, region, compartments, network):
-    declaration = catalog["project_onboarding"]
-    if project not in declaration["projects"].get(environment, {}):
-        raise ContractError("project has not been onboarded in the reviewed model")
-    if region not in catalog["regions"]:
-        raise ContractError("unknown handoff region")
-    region_code = catalog["region_codes"].get(region)
-    if not region_code:
-        raise ContractError("region code must be declared in handoff catalog")
-    project_key = "CMP-LZ-" + environment.upper() + "-" + project.upper() + "-KEY"
-    try:
-        compartment_id = compartments["compartments"][project_key]["id"]
-        vcn_key = f"VCN-{region_code}-LZ-{environment.upper()}-PROJECTS-KEY"
-        vcn = network["network_resources"]["vcns"][vcn_key]
-    except KeyError as exc:
-        raise ContractError("missing deployed handoff resource: " + str(exc)) from exc
-    if not compartment_id.startswith("ocid1.compartment.") or not vcn["id"].startswith("ocid1.vcn."):
-        raise ContractError("invalid handoff OCIDs")
-    if vcn["id"].split(".")[3] != region:
-        raise ContractError("handoff VCN region mismatch")
-    subnet_map = network["network_resources"].get("subnets", {})
-    subnet_ids = [s["id"] for s in subnet_map.values() if s.get("vcn_id") == vcn["id"]]
-    if not subnet_ids:
-        raise ContractError("handoff requires at least one deployed subnet on the assigned VCN")
-    if any(not sid.startswith("ocid1.subnet.") or sid.split(".")[3] != region for sid in subnet_ids):
-        raise ContractError("handoff subnet region/type mismatch")
-    return {"reference_handoff_version": 1, "project": project, "environment": environment,
-            "region": region, "compartment_id": compartment_id, "vcn_id": vcn["id"],
-            "subnet_ids": sorted(subnet_ids), "iam_owner": "cloud-operations",
-            "workload_repository": ("prod-" if environment == "prod" else "nonprod-") + project,
-            "workload_state_key": f"oci/{environment}/{region}/terraform.tfstate",
-            "constraints": {"may_manage_iam": False, "may_manage_hub": False}}
+def handoff(catalog, environment, project, region, compartments, network, common_config, network_config, source):
+    from mccp import render_handoff
+    return render_handoff(catalog, environment, project, region, compartments, network,
+                          common_config, network_config, source)[1]
+
+
+def load_documents(generated, catalog):
+    paths = {p for s in catalog["stacks"] for p in s["configurations"].values()}
+    paths.update(catalog["project_onboarding"].get("baselines", []))
+    return {p: read_json(checked_path(generated, p)) for p in paths}
 
 
 def write_generation(model, documents, output, provenance):
@@ -392,7 +390,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     fetch = sub.add_parser("fetch")
-    fetch.add_argument("source", choices=["operating_entities", "orchestrator"])
+    fetch.add_argument("source", choices=["operating_entities", "orchestrator", "mccp_foundation"])
     fetch.add_argument("--cache", default=str(ROOT / ".cache"))
     gen = sub.add_parser("generate")
     gen.add_argument("--model", default=str(ROOT / "examples/two-region.jsonnet"))
@@ -424,6 +422,11 @@ def main():
     ho.add_argument("--compartments", required=True)
     ho.add_argument("--network", required=True)
     ho.add_argument("--output", required=True)
+    for field in ("repository", "workflow", "run", "commit"):
+        ho.add_argument("--source-" + field, required=True)
+    vh = sub.add_parser('validate-handoff', help='MCCP consumer gate using selected foundation state owners')
+    for field in ('generated', 'handoff-json', 'handoff-markdown', 'source-repository'):
+        vh.add_argument('--' + field, required=True)
     args = parser.parse_args()
     if args.command == "fetch":
         print(locked_checkout(args.source, args.cache))
@@ -434,7 +437,9 @@ def main():
             raise ContractError("generator upstream does not match lock")
         model, documents = evaluate(args.model, upstream)
         catalog, count = write_generation(model, documents, args.output, read_json(ROOT / "upstream.lock.json"))
-        print(f"Generated {len(catalog['stacks'])} stacks, {len(documents)} configurations, {count} owned keys")
+        foundations = len({p for stack in catalog['stacks'] for p in stack['configurations'].values()})
+        seeds = len(catalog['project_onboarding']['baselines'])
+        print(f"Generated {len(catalog['stacks'])} foundation stacks, {foundations} configurations, {seeds} project NSG seeds, {count} owned keys")
     elif args.command == "import-studio":
         from studio import import_studio
         catalog, count = import_studio(args)
@@ -442,7 +447,7 @@ def main():
     elif args.command == "validate":
         generated = Path(args.generated)
         catalog = read_json(generated / "catalog.json")
-        documents = {p: read_json(checked_path(generated, p)) for s in catalog["stacks"] for p in s["configurations"].values()}
+        documents = load_documents(generated, catalog)
         count = validate(catalog, documents)
         print(f"Valid operation boundaries: {len(catalog['stacks'])} stacks, {count} owned keys")
     elif args.command == "prepare":
@@ -450,11 +455,17 @@ def main():
                             args.runtime, args.bucket, read_json(args.bindings) if args.bindings else {})
         print(f"Prepared {args.runtime} inputs in {args.destination}; resource region {variables['region']}")
     elif args.command == "handoff":
-        catalog = read_json(Path(args.generated) / "catalog.json")
-        value = handoff(catalog, args.environment, args.project, args.region,
-                        read_json(args.compartments), read_json(args.network))
-        write_json(args.output, value)
-        print(f"Prepared reference handoff: {args.output}")
+        from mccp import write_handoff
+        write_handoff(args.generated, args.environment, args.project, args.region,
+                      args.compartments, args.network,
+                      {field: getattr(args, "source_" + field) for field in ("repository", "workflow", "run", "commit")}, args.output)
+        print(f"Prepared MCCP schema-3 handoff package: {args.output}")
+    elif args.command == 'validate-handoff':
+        from mccp import validate_handoff
+        catalog = read_json(Path(args.generated) / 'catalog.json')
+        validate(catalog, load_documents(args.generated, catalog))
+        value = validate_handoff(catalog, read_json(args.handoff_json), Path(args.handoff_markdown).read_text(), args.source_repository)
+        print(json.dumps(value, sort_keys=True))
 
 
 if __name__ == "__main__":

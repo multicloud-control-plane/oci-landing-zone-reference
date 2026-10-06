@@ -129,7 +129,11 @@ def supported(config):
         fields(env, {'project_network', 'projects', 'platforms'}, {'project_network', 'projects', 'platforms'}, 'environment.' + key)
         fields(env['project_network'], {'network'}, {'network'}, 'project_network')
         network(env['project_network']['network'], 'project_network.network')
-        names(env['projects'], 'project')
+        if not isinstance(env['projects'], dict):
+            raise ContractError('projects must be an object')
+        from mccp import validate_project_name
+        for project in env['projects']:
+            validate_project_name(key, project)
         if any(v != {} for v in env['projects'].values()):
             raise ContractError('unsupported project options: Studio project declarations must be empty objects')
         platforms(env['platforms'], 'platform')
@@ -242,17 +246,19 @@ model.jsonnet preserves the original config objects and can regenerate this set.
 - Notification subscriptions use the explicit import email.
 - Audit Service Connectors are excluded by the initial reference baseline
   because their module embeds regional IAM. This is not full CIS certification.
-- Preserved project NSGs belong to OP02: adding/removing a Studio project can
-  require a reviewed regional change as well as the global IAM update.
+- Project IAM uses the existing MCCP TBAC root and APP/DB/INFRA children.
+- Preserved project NSGs are emitted as separate project-owned seeds. They
+  are excluded from OP02, then bind to the existing VCN and project INFRA
+  compartment in the schema-3 handoff package. Review their project PR separately.
 
 ## Deployment and MCCP boundary
 
 Run the normal prepare/plan/approval flow in a private installation. Import runs
 neither Terraform nor OCI. Deployed outputs and firewall OCIDs are still required.
 OCI deployment, connectivity and migration/rollback remain unvalidated here.
-MCCP already defines a schema-3 handoff and project-owned NSGs in INFRA.
-This importer still retains project NSGs in OP02 and uses the reference's
-version-1 handoff with a different IAM hierarchy. Adapt those implementation
-gaps to the existing MCCP contract; they are not open design decisions.
-See docs/studio-mccp-flow.md in the reference repository for sources and scope.
+The handoff reuses MCCP's pinned schema-3 renderer and records actual common
+IAM and regional OP02 state keys. Configure MCCP's consumer for those owners;
+the earlier Cloud Operator validator hard-codes different state paths.
+Offline contract tests do not verify deployed permissions or self-service.
+See docs/studio-mccp-flow.md for the installation boundary and acceptance checks.
 '''

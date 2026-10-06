@@ -70,23 +70,51 @@ the official TBAC add-on through the
 The environment-wide runner scope is an explicit MVP choice, as described in
 the [architecture](https://github.com/multicloud-control-plane/oci-landing-zone/blob/9b4033267af881e65fe8c2b212f220b2804cac09/docs/architecture.md).
 
-## Reference adaptation still required
+## Implemented reference adapter
 
-These are implementation gaps in this reference, not open MCCP design questions:
+Generation reuses the pinned MCCP TBAC adapter and official OE add-on for
+APP/DB/INFRA compartments, groups, tags and generic policies in common. Both
+Studio and model sources emit separate project NSG seeds, excluded from OP02.
+Onboarding and retirement update the common declaration and project seeds.
 
-- The current `handoff` command emits a reference-owned version-1 artifact;
-  adapt it to the established schema-3 renderer, deployed output evidence and
-  repository routing.
-- The current common IAM projection lacks the APP/DB/INFRA project hierarchy
-  and associated TBAC definitions. Reuse the existing source-backed adapter
-  rather than alias all workload targets to the project root.
-- The Studio importer currently retains project NSGs in OP02. Adapt the
-  projection to preserve their design while assigning deployment to project
-  GitOps in INFRA. Existing deployments need a reviewed state transfer before
-  that ownership changes; do not create a second owner.
-- Wire the reference into MCCP's existing onboarding/publication workflow and
-  verify the full self-service path, effective IAM and retirement in a test
-  tenancy. The importer tests do not establish end-to-end compatibility.
+`reference.py handoff` reuses the pinned schema-3 renderer. It requires deployed
+outputs and source provenance, checks the hierarchy and assigned network, and
+produces the canonical Markdown plus a bound project NSG manifest. See
+[project onboarding](project-onboarding.md) for commands and publication order.
+
+## MCCP installation and consumer gate
+
+Select this reference as the private foundation's generator and OP04 engine.
+Keep the project's existing MCCP catalogs, templates and Platform CI workflow.
+The optional UI's environment handoff reader receives the same Markdown contract.
+The UI continues operating already handed-off projects; Cloud Operations handles
+foundation onboarding and publication.
+
+The earlier Cloud Operator `validate-handoff.py` fixes the old MVP state keys.
+For this foundation use the provided consumer gate with the protected generated
+catalog from the reviewed foundation revision:
+
+```bash
+python3 scripts/reference.py validate-handoff \
+  --generated generated/revision-002 \
+  --handoff-json handoffs/dev-billing-fra/project-foundation-handoff.json \
+  --handoff-markdown handoffs/dev-billing-fra/environments/dev/environment_information.md \
+  --source-repository example/private-foundation
+```
+
+It validates schema 3, project/region/repository routing, source repository,
+distinct targets and matching Markdown; state provenance must match the actual
+catalog owners. OP04 records `common/terraform.tfstate`; OP02 records
+`workload_<environment>/<region>/terraform.tfstate`. Configure the selected
+Cloud Operator installation to call these model/onboarding/handoff commands and
+this gate. The old foundation's installation is not changed by installing the
+reference, and its validator still applies to its own state layout.
+
+For existing deployments, transfer NSG state ownership and review any compartment
+move before publishing the project seed. Do not deploy a seed over NSGs already
+owned by foundation. Offline tests cover generation, binding and consumer
+contracts; effective IAM, create/update/delete, traffic and full retirement still
+require OCI test-tenancy acceptance.
 
 For consolidated IAM, onboarding is an OP04 operation executed against common;
 there is no invented separate OP04 IAM state. Handoffs should record the real

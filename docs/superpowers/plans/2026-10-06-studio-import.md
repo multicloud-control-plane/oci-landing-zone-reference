@@ -24,3 +24,28 @@ never run Terraform or OCI. User approved the integration design in chat.
   import commands, outputs, design adjustments and deployment boundaries.
 - [ ] Run complete tests, generation, facade/docs/workflow checks; review the
   patch, publish a PR, verify remote CI and record the delivery in PKM.
+
+## MCCP adaptation approved by the user
+
+Implementation continues in the existing isolated worktree.
+
+- [x] `tests/test_mccp.py`: fail tests for official TBAC children/groups, project
+  NSG isolation, duplicate owners and schema-3 artifact package with real state keys.
+- [x] `upstream.lock.json`, `gen/project.libsonnet`, `scripts/reference.py`: pin
+  MCCP foundation; reuse `config/tbac.libsonnet` with the official OE add-on;
+  consolidate IAM and emit `projects/<environment>-<project>/<region>/project-nsgs.json`
+  outside foundation stacks. Include seed ownership in catalog validation.
+- [x] `scripts/mccp.py`: reuse the pinned upstream handoff renderer, validate
+  hierarchy/network/provenance, bind NSG seeds and write a fresh artifact package.
+  Add CLI provenance arguments and private artifact-only workflow template.
+- [x] `scripts/onboard.py`, `scripts/studio.py`, tests and docs: align DNS project
+  names, subsequent onboarding/retirement and NSG ownership; verify unchanged
+  CIDRs/subnets/rules with the real Studio snapshots and test negative evidence.
+- [x] Verify the exact consumer's state-provenance mapping without changing the
+  old installation or publishing private implementation code. Record any external
+  installation dependency separately from reference contract test results.
+- [x] Run all tests, facade/doc/actionlint gates and self-review: 47 offline tests
+  pass; both source modes validate. Actual MCCP UI/Platform CI consumers passed
+  local checks with synthetic OCI evidence. Publication and remote CI status are
+  tracked by [PR #1](https://github.com/multicloud-control-plane/oci-landing-zone-reference/pull/1)
+  and the owning PKM project; deployment acceptance remains separate.
