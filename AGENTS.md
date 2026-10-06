@@ -3,6 +3,20 @@
 This is the customer-agnostic reference implementation for the Operations
 Advisory Landing Zone repository design. Work in branches and review changes.
 
+## Spec-Driven Development (SDD)
+
+For meaningful changes, start with a concise spec stating intent,
+contracts/boundaries and acceptance criteria. Then write the plan, implement it,
+and record acceptance evidence against those criteria. Prefer updating existing
+docs and match the detail to the change. SDD is an authoring practice; it adds
+no deployment-path tooling or new framework.
+
+The balanced onboarding change follows its committed
+[spec](docs/superpowers/specs/2026-10-06-balanced-onboarding.md) and
+[plan](docs/superpowers/plans/2026-10-06-balanced-onboarding.md).
+
+## Implementation boundaries
+
 - Resource semantics come from the pinned Operating Entities libraries.
 - Accepted configuration/dependency families come from the pinned Orchestrator.
 - Keep OP00 IAM/global resources non-regional and regional operations independent.
@@ -16,6 +30,19 @@ Advisory Landing Zone repository design. Work in branches and review changes.
 - Public CI is credential-free. Privileged deployment jobs belong in a private,
   protected customer installation with separate identities and approval gates.
 - Update docs/tests with adapter, operation or runtime contract changes.
+- Favor minimal custom maintenance: manually install repositories, scoped runners,
+  buckets/settings, review plans, verify live resources and publish outputs/handoffs.
+- Keep existing helpers as defaults for repeated/error-prone work: `reference.py`
+  generation/ownership/region/dependency checks, Studio verification and schema-3
+  binding; `runtime.py` complete pinned workdir/provider aliases/catalog backend;
+  `onboard.py` synchronization of canonical and imported Studio project declarations.
+- Do not duplicate upstream HCL/resources, MCCP rendering or runtime staging.
+  Add automation for simple operator steps only when repetition justifies its
+  maintenance. Private workflows remain optional; handoffs retain genuine
+  protected workflow provenance even when deployment/publication is manual.
+- Keep setup in `docs/getting-started.md`, workflow installation/variables in
+  `docs/private-workflows.md`, execution/publication in their existing owning docs.
+  See the responsibility matrix in `docs/design.md`.
 - Verify `python3 -m unittest discover -s tests -v`, generation, catalog validation,
   upstream family contract and documentation links before publishing.
 

@@ -13,19 +13,11 @@ deployment in the customer's private installation.
    platform networks are supported. Studio's default design may be outside this
    scope: import fails explicitly rather than changing those choices.
 2. Download the deployment ZIP. Keep it in a private configuration repository.
-3. Run import with explicit operating metadata:
+3. Follow [Getting started](getting-started.md#studio-design-and-promotion) for
+   exports under `customer/config/studio/`, import to `generated/revision-001`,
+   validation and promotion to `customer/config/model.jsonnet`.
 
-```bash
-python3 scripts/reference.py import-studio \
-  --source customer/studio-fra.zip --source customer/studio-ams.zip \
-  --home-region eu-frankfurt-1 --landing-zone-environment shared \
-  --notification-email operations@example.com \
-  --output generated/studio-revision-001
-python3 scripts/reference.py validate --generated generated/studio-revision-001
-python3 scripts/check_contract.py --generated generated/studio-revision-001
-```
-
-Replace the example email. One export represents one region. Supply the home
+One export represents one region. Supply the home
 region export too; every region must describe the same global IAM hierarchy.
 Regional addresses remain regional; review their connectivity and overlap
 requirements. The initial ownership model uses Cloud Operations as the writer
@@ -69,15 +61,10 @@ and [private CLI](terraform-cli.md) or [Resource Manager](resource-manager.md)
 flow. Hub bootstrap/final share state; private IP bindings and deployed output
 files are still required. Import does not run Terraform or OCI.
 
-The private workflow has a `configuration` choice:
-
-- `studio`: put one ZIP per region under `config/studio/`; set `HOME_REGION`,
-  `LANDING_ZONE_ENVIRONMENT` and `NOTIFICATION_EMAIL` in addition to the normal
-  runtime variables. Each run verifies and imports those exports before planning
-  the selected operation.
-- `model`: promote the reviewed imported `model.jsonnet` to `config/model.jsonnet`
-  and maintain it through Git after the initial import. Historical ZIPs remain
-  evidence. The adapter's resource projection is retained during regeneration.
+The optional [private workflows](private-workflows.md) document the `configuration`
+choice and all installation variables. Prefer model mode after promotion;
+historical ZIPs remain evidence and the adapter's resource projection is retained
+during regeneration.
 
 For later Studio edits, export/import a fresh revision and review the delta
 against the canonical model before promotion. Do not overwrite later project

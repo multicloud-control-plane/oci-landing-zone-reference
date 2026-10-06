@@ -50,6 +50,29 @@ replacement blueprint product or a claim of a complete CIS certification.
   Customer deployment automation requires private installation and protected
   approval environments.
 
+## Maintenance responsibilities
+
+Retain automation where mistakes affect resource/state ownership or repeated
+preparation. Keep simple installation and reviewed publication as operator steps;
+add automation when operational repetition pays for its maintenance.
+
+| Owner / mechanism | Responsibility | Reason |
+| --- | --- | --- |
+| Pinned OE, Orchestrator and MCCP | Resource definitions, execution facade, TBAC and canonical handoff renderer | Reuse upstream semantics and contracts |
+| Reference generation/preparation and Studio/schema-3 adapters | Ownership, region/dependency validation, verified Studio projection, bound handoff and project NSG seeds | Enforce operation boundaries and reject inconsistent inputs |
+| Existing `runtime.py` (default CLI staging) | New complete pinned workdir, provider alias/Instance Principal overrides, catalog backend | Avoid relative-module, provider and state-key mistakes without duplicate manual HCL |
+| Existing `onboard.py` (default OP04 model change) | Synchronize project declarations across the model and imported Studio configs | Avoid divergent copies or project loss at regeneration |
+| Cloud Operations, manually | Private repository/runner/bucket/settings setup, saved-plan review, live verification, firewall discovery, producer and handoff/NSG publication | Bounded installation/review steps with explicit evidence |
+| Optional protected private workflows | Selected-operation plan/apply and artifact-only handoff generation with real run provenance | Useful repeated orchestration while retaining operator approval/publication |
+
+[Getting started](getting-started.md) owns source setup/promotion;
+[private workflows](private-workflows.md) owns template variables/activation.
+[Generation and dependencies](generation-and-dependencies.md),
+[CLI](terraform-cli.md), [ORM](resource-manager.md) and
+[project onboarding](project-onboarding.md) own execution/publication.
+[MCCP installation](studio-mccp-flow.md) owns the selected installation's command
+and consumer-gate mapping. Installing this reference changes no live installation.
+
 ## Security and verification boundaries
 
 Cloud Operations owns IAM. Reviewer ownership is distinct from repository write
