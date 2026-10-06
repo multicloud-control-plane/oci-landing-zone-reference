@@ -30,8 +30,12 @@
 
 ## Task 3: Deliver
 
-- [ ] Publish PR with spec/plan/evidence, merge through existing CI gate and verify main.
-- [ ] Update the owning PKM project with delivery and keep real OCI acceptance pending; SR links delivery without duplicating the guide.
+- Publish PR with spec/plan/evidence, merge through existing CI gate and verify main.
+- Update the owning PKM project with delivery and keep real OCI acceptance pending; SR links delivery without duplicating the guide.
+
+Integration status and remote CI are recorded by
+[PR #2](https://github.com/multicloud-control-plane/oci-landing-zone-reference/pull/2),
+so this committed plan does not need a post-merge edit to claim its own delivery.
 
 ## Acceptance evidence — 2026-10-06
 
@@ -50,3 +54,26 @@ AC1–AC8, rather than treating documentation syntax as proof of deployment.
 No OCI calls, Terraform validate/plan/apply, customer state migration or live MCCP
 installation changes were executed. Test-tenancy acceptance remains governed by
 [Validation and scope](../../validation.md#real-installation-acceptance).
+
+## Continue in a new session
+
+1. Read the root [contributor contract](../../../AGENTS.md), this specification
+   and plan, then the PR's final acceptance/merge record. Use the latest `main`;
+   confirm PR #2 is merged before assuming this delivery is integrated.
+2. The implementation already includes Studio import, operation/state projection
+   and the MCCP schema-3/INFRA NSG adaptation (PR #1). This change guides adoption
+   and preserves those contracts; do not reopen resolved ownership choices.
+3. After integration, the remaining acceptance work is the
+   [real-installation checklist](../../validation.md#real-installation-acceptance).
+   Start by obtaining a test tenancy, approved home/managed regions and CIDRs,
+   private source repository, scoped runners/state buckets, a real supported
+   Studio export and a test MCCP installation. Deployment needs its own explicit
+   authorization; this session executed no cloud operation.
+4. The existing MCCP installation has not been changed. Before enabling its
+   handoff workflow, select this reference's catalog-based consumer gate/commands
+   as described in [MCCP installation](../../studio-mccp-flow.md). Its MVP runner
+   scope is per environment; do not infer per-project runner isolation.
+5. Keep the agreed maintenance rule: upstream resource definitions/rendering,
+   useful existing helpers, optional workflows and simple documented operator
+   steps. Record new evidence against a spec and plan; keep real customer inputs,
+   states, plans and outputs private.
