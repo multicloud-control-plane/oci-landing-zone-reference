@@ -67,9 +67,14 @@ the source of truth for subsequent Git changes.
 ### Studio design and promotion
 
 Use the supported scope in [Studio import](studio-import.md): Hub B, CIS1, oc1,
-no environment Security Zones or OKE/OCVS extensions. Save one export ZIP per
-region to `customer/config/studio/`, including the home region. Replace the email
-with the approved operations address before running:
+no environment Security Zones or OKE/OCVS extensions. Create the export directory:
+
+```bash
+mkdir -p customer/config/studio
+```
+
+Save one export ZIP per region there, including the home region. Replace the
+email with the approved operations address before running:
 
 ```bash
 python3 scripts/reference.py import-studio \
